@@ -58,11 +58,18 @@ static const char *PROGRAM_NAME = "vaultdb";
 static const char *PROGRAM_VERSION = "0.1.0";
 static const char *PROGRAM_AUTHOR = "Robert Tulke <rt@debian.sh>";
 static const char *PROGRAM_LICENSE = "MIT";
+static const int AUTO_LOCK_SECONDS = 300; /* auto-lock after 5 minutes idle */
 
 static const char *DB_STATUS_OFFLINE = "locked";
 static const char *DB_STATUS_ONLINE = "unlocked";
 static const char *db_status = "locked";
 static char db_path[MAX_PATH_LEN] = "vault.db";
+static char log_path[MAX_PATH_LEN] = "";
+static time_t last_activity = 0;
+
+/* Forward declarations for UI helpers used by logging */
+static void ui_clear_body(void);
+static void print_error_line(const char *msg);
 
 static void generate_password(char *out, size_t max_len, int length, int mode);
 
@@ -108,6 +115,27 @@ static void now_string(char *buf, size_t size) {
     strftime(buf, size, "%d.%m.%Y %H:%M:%S", tm_info);
 }
 
+static void log_timestamp(char *buf, size_t size) {
+    time_t t = time(NULL);
+    struct tm *tm_info = localtime(&t);
+    strftime(buf, size, "%Y-%m-%d %H:%M:%S", tm_info);
+}
+
+static void touch_activity(void) {
+    last_activity = time(NULL);
+}
+
+static void redraw_input_line(int starty, int startx, const char *buffer, size_t prev_len, size_t cursor) {
+    move(starty, startx);
+    printw("%s", buffer);
+    size_t cur_len = strlen(buffer);
+    if (prev_len > cur_len) {
+        for (size_t i = 0; i < prev_len - cur_len; ++i) addch(' ');
+    }
+    move(starty, startx + (int)cursor);
+    refresh();
+}
+
 static bool append_text(char **buf, size_t *blen, size_t *bcap, const char *text) {
     size_t tlen = strlen(text);
     if (*blen + tlen + 1 >= *bcap) {
@@ -120,6 +148,273 @@ static bool append_text(char **buf, size_t *blen, size_t *bcap, const char *text
     memcpy(*buf + *blen, text, tlen);
     *blen += tlen;
     (*buf)[*blen] = '\0';
+    return true;
+}
+
+static void append_log_entry(const char *entry) {
+    if (!log_path[0] || !entry) return;
+    FILE *fp = fopen(log_path, "a");
+    if (!fp) return;
+    char ts[32];
+    log_timestamp(ts, sizeof(ts));
+    fprintf(fp, "%s %s %s\n", ts, PROGRAM_NAME, entry);
+    fclose(fp);
+}
+
+static bool string_in_list(const char *s, char list[][MAX_LINE], size_t count) {
+    for (size_t i = 0; i < count; ++i) {
+        if (strcmp(s, list[i]) == 0) return true;
+    }
+    return false;
+}
+
+static size_t gather_users(const Database *db, char out[][MAX_LINE], size_t max_out) {
+    size_t count = 0;
+    if (!db) return 0;
+    for (size_t i = 0; i < db->count && count < max_out; ++i) {
+        if (!string_in_list(db->items[i].user, out, count)) {
+            strncpy(out[count], db->items[i].user, MAX_LINE - 1);
+            out[count][MAX_LINE - 1] = '\0';
+            count++;
+        }
+    }
+    return count;
+}
+
+static size_t gather_tags(const Database *db, char out[][MAX_LINE], size_t max_out) {
+    size_t count = 0;
+    if (!db) return 0;
+    for (size_t i = 0; i < db->count && count < max_out; ++i) {
+        char tmp[MAX_TAGS + 1];
+        strncpy(tmp, db->items[i].tags, sizeof(tmp) - 1);
+        tmp[sizeof(tmp) - 1] = '\0';
+        char *tok = strtok(tmp, ",");
+        while (tok && count < max_out) {
+            while (*tok && isspace((unsigned char)*tok)) tok++;
+            if (!string_in_list(tok, out, count)) {
+                strncpy(out[count], tok, MAX_LINE - 1);
+                out[count][MAX_LINE - 1] = '\0';
+                count++;
+            }
+            tok = strtok(NULL, ",");
+        }
+    }
+    return count;
+}
+
+static size_t gather_statuses(const Database *db, char out[][MAX_LINE], size_t max_out) {
+    size_t count = 0;
+    if (!db) return 0;
+    for (size_t i = 0; i < db->count && count < max_out; ++i) {
+        if (!string_in_list(db->items[i].status, out, count)) {
+            strncpy(out[count], db->items[i].status, MAX_LINE - 1);
+            out[count][MAX_LINE - 1] = '\0';
+            count++;
+        }
+    }
+    return count;
+}
+
+static size_t gather_ids(const Database *db, char out[][MAX_LINE], size_t max_out) {
+    size_t count = 0;
+    if (!db) return 0;
+    for (size_t i = 0; i < db->count && count < max_out; ++i) {
+        snprintf(out[count], MAX_LINE, "%d", db->items[i].id);
+        count++;
+    }
+    return count;
+}
+
+static void show_history_log(void) {
+    ui_clear_body();
+    move(BODY_START_ROW, 0);
+    FILE *fp = fopen(log_path, "r");
+    if (!fp) {
+        print_error_line("No history log found.");
+        refresh();
+        return;
+    }
+    attron(COLOR_PAIR(BODY_PAIR));
+    char line[MAX_LINE];
+    while (fgets(line, sizeof(line), fp)) {
+        line[strcspn(line, "\n")] = '\0';
+        printw("%s\n", line);
+    }
+    attroff(COLOR_PAIR(BODY_PAIR));
+    fclose(fp);
+    refresh();
+}
+
+static void clear_history_log(void) {
+    FILE *fp = fopen(log_path, "w");
+    ui_clear_body();
+    move(BODY_START_ROW, 0);
+    if (!fp) {
+        print_error_line("Unable to clear history log.");
+        refresh();
+        return;
+    }
+    fclose(fp);
+    attron(COLOR_PAIR(BODY_PAIR));
+    printw("History cleared.\n");
+    attroff(COLOR_PAIR(BODY_PAIR));
+    refresh();
+}
+
+static void show_completions(char list[][MAX_LINE], size_t count) {
+    if (count == 0) return;
+    ui_clear_body();
+    move(BODY_START_ROW, 0);
+    attron(COLOR_PAIR(BODY_PAIR));
+    printw("Suggestions:\n");
+    for (size_t i = 0; i < count; ++i) {
+        printw("  %s\n", list[i]);
+    }
+    attroff(COLOR_PAIR(BODY_PAIR));
+    refresh();
+}
+
+static size_t longest_common_prefix(char list[][MAX_LINE], size_t count) {
+    if (count == 0) return 0;
+    size_t prefix = strlen(list[0]);
+    for (size_t i = 1; i < count; ++i) {
+        size_t j = 0;
+        while (j < prefix && list[0][j] && list[i][j] && list[0][j] == list[i][j]) j++;
+        prefix = j;
+    }
+    return prefix;
+}
+
+static bool handle_completion(const Database *db, char *buffer, size_t *idx, size_t size, int starty, int startx) {
+    const size_t max_candidates = 128;
+    char candidates[128][MAX_LINE];
+    size_t cand_count = 0;
+
+    bool ends_with_space = (*idx > 0 && buffer[*idx - 1] == ' ');
+
+    /* Find partial boundaries */
+    size_t partial_start = 0;
+    if (!ends_with_space) {
+        for (size_t i = *idx; i > 0; --i) {
+            if (buffer[i - 1] == ' ') {
+                partial_start = i;
+                break;
+            }
+        }
+    } else {
+        partial_start = *idx;
+    }
+    size_t partial_len = *idx - partial_start;
+    const char *partial = buffer + partial_start;
+
+    /* Copy buffer to tokenize for context (command/args) */
+    char copy[MAX_LINE];
+    strncpy(copy, buffer, sizeof(copy) - 1);
+    copy[sizeof(copy) - 1] = '\0';
+    char *tokens[16];
+    int token_count = 0;
+    char *saveptr;
+    char *tok = strtok_r(copy, " ", &saveptr);
+    while (tok && token_count < 16) {
+        tokens[token_count++] = tok;
+        tok = strtok_r(NULL, " ", &saveptr);
+    }
+
+    /* Helper to add a candidate if it matches partial */
+    #define ADD_CAND(str)                                                                 \
+        do {                                                                              \
+            if (cand_count < max_candidates && strncmp(str, partial, partial_len) == 0) { \
+                strncpy(candidates[cand_count], str, MAX_LINE - 1);                       \
+                candidates[cand_count][MAX_LINE - 1] = '\0';                              \
+                cand_count++;                                                             \
+            }                                                                             \
+        } while (0)
+
+    const char *base_cmds[] = {"help", "show", "add", "change", "rm", "version", "lock", "history", "clear", "quit", "exit", "q"};
+
+    if (token_count == 0 || (token_count == 1 && !ends_with_space)) {
+        for (size_t i = 0; i < sizeof(base_cmds) / sizeof(base_cmds[0]); ++i) {
+            ADD_CAND(base_cmds[i]);
+        }
+    } else {
+        const char *cmd = tokens[0];
+        if (strcmp(cmd, "add") == 0) {
+            ADD_CAND("pw");
+        } else if (strcmp(cmd, "change") == 0) {
+            if (token_count == 1 || (token_count == 2 && !ends_with_space)) {
+                ADD_CAND("pw");
+                char ids[128][MAX_LINE];
+                size_t idc = gather_ids(db, ids, 128);
+                for (size_t i = 0; i < idc; ++i) ADD_CAND(ids[i]);
+            } else if ((token_count == 2 && ends_with_space) || (token_count == 3 && strcmp(tokens[1], "pw") == 0)) {
+                char users[128][MAX_LINE];
+                size_t uc = gather_users(db, users, 128);
+                for (size_t i = 0; i < uc; ++i) ADD_CAND(users[i]);
+            }
+        } else if (strcmp(cmd, "rm") == 0) {
+            if (token_count == 1 || (token_count == 2 && !ends_with_space)) {
+                ADD_CAND("pw");
+            } else {
+                char ids[128][MAX_LINE];
+                size_t idc = gather_ids(db, ids, 128);
+                for (size_t i = 0; i < idc; ++i) ADD_CAND(ids[i]);
+            }
+        } else if (strcmp(cmd, "show") == 0) {
+            if (token_count == 1 || (token_count == 2 && !ends_with_space)) {
+                const char *opts[] = {"all", "tag", "user", "url", "date", "status"};
+                for (size_t i = 0; i < sizeof(opts) / sizeof(opts[0]); ++i) ADD_CAND(opts[i]);
+                char ids[128][MAX_LINE];
+                size_t idc = gather_ids(db, ids, 128);
+                for (size_t i = 0; i < idc; ++i) ADD_CAND(ids[i]);
+            } else if ((token_count == 2 && ends_with_space) || (token_count == 3 && strcmp(tokens[1], "user") == 0)) {
+                char users[128][MAX_LINE];
+                size_t uc = gather_users(db, users, 128);
+                for (size_t i = 0; i < uc; ++i) ADD_CAND(users[i]);
+            } else if ((token_count == 3 && strcmp(tokens[1], "tag") == 0)) {
+                char tags[128][MAX_LINE];
+                size_t tc = gather_tags(db, tags, 128);
+                for (size_t i = 0; i < tc; ++i) ADD_CAND(tags[i]);
+            } else if ((token_count == 3 && strcmp(tokens[1], "status") == 0)) {
+                char stats[128][MAX_LINE];
+                size_t sc = gather_statuses(db, stats, 128);
+                for (size_t i = 0; i < sc; ++i) ADD_CAND(stats[i]);
+            }
+        } else if (strcmp(cmd, "history") == 0) {
+            ADD_CAND("clear");
+        }
+    }
+
+    #undef ADD_CAND
+
+    if (cand_count == 0) {
+        beep();
+        return true;
+    }
+    if (cand_count == 1) {
+        size_t old_len = *idx;
+        buffer[partial_start] = '\0';
+        strncat(buffer, candidates[0], size - strlen(buffer) - 1);
+        if (strlen(buffer) + 1 < size) {
+            strcat(buffer, " ");
+        }
+        *idx = strlen(buffer);
+        redraw_input_line(starty, startx, buffer, old_len, *idx);
+        return true;
+    }
+
+    /* Multiple candidates: try to extend to common prefix */
+    size_t lcp = longest_common_prefix(candidates, cand_count);
+    if (lcp > partial_len) {
+        size_t old_len = *idx;
+        buffer[partial_start] = '\0';
+        size_t space_left = size - strlen(buffer) - 1;
+        size_t add_len = lcp < space_left ? lcp : space_left;
+        strncat(buffer, candidates[0], add_len);
+        *idx = strlen(buffer);
+        redraw_input_line(starty, startx, buffer, old_len, *idx);
+    }
+    show_completions(candidates, cand_count);
+    redraw_input_line(starty, startx, buffer, *idx, *idx);
     return true;
 }
 
@@ -361,6 +656,60 @@ static bool read_line(char *buffer, size_t size) {
         }
         if (!isprint(ch)) continue;
         if (idx + 1 >= size) continue;
+        touch_activity();
+        buffer[idx++] = (char)ch;
+        addch((ch == '\t') ? ' ' : ch);
+        refresh();
+    }
+}
+
+static bool read_command_line(const Database *db, char *buffer, size_t size) {
+    size_t idx = 0;
+    attrset(COLOR_PAIR(BODY_PAIR));
+    noecho();
+    keypad(stdscr, TRUE);
+    int starty, startx;
+    getyx(stdscr, starty, startx);
+    timeout(500); /* check idle every 500ms */
+    while (1) {
+        int ch = getch();
+        if (ch == ERR) {
+            if (last_activity > 0) {
+                time_t now = time(NULL);
+                if (now - last_activity >= AUTO_LOCK_SECONDS) {
+                    strcpy(buffer, "lock");
+                    timeout(-1);
+                    return true;
+                }
+            }
+            continue;
+        }
+        if (ch == '\t') {
+            handle_completion(db, buffer, &idx, size, starty, startx);
+            continue;
+        }
+        if (ch == '\n' || ch == '\r') {
+            buffer[idx] = '\0';
+            timeout(-1);
+            return true;
+        }
+        if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) {
+            if (idx > 0) {
+                idx--;
+                int y, x;
+                getyx(stdscr, y, x);
+                if (x > 0) {
+                    move(y, x - 1);
+                    addch(' ');
+                    move(y, x - 1);
+                    refresh();
+                }
+            }
+            continue;
+        }
+        if (!isprint(ch)) continue;
+        if (idx + 1 >= size) continue;
+        touch_activity();
         buffer[idx++] = (char)ch;
         addch((ch == '\t') ? ' ' : ch);
         refresh();
@@ -399,6 +748,7 @@ static bool read_password_obfuscated(char *buffer, size_t size) {
             continue;
         }
         if (idx + 1 >= size) continue;
+        touch_activity();
         int stars = (rand() % 3) + 1;
         star_counts[idx] = stars;
         buffer[idx++] = (char)ch;
@@ -408,7 +758,7 @@ static bool read_password_obfuscated(char *buffer, size_t size) {
     }
 }
 
-static bool prompt_command(const char *label, char *buffer, size_t size) {
+static bool prompt_command(const Database *db, const char *label, char *buffer, size_t size) {
     (void)label;
     ui_draw_divider();
     move(LINES - 1, 0);
@@ -421,7 +771,7 @@ static bool prompt_command(const char *label, char *buffer, size_t size) {
     attroff(COLOR_PAIR(TITLE_PAIR));
     printw(" ");
     refresh();
-    return read_line(buffer, size);
+    return read_command_line(db, buffer, size);
 }
 
 static bool prompt_password(const char *label, char *buffer, size_t size) {
@@ -965,6 +1315,8 @@ static void print_help(void) {
     printw("  rm pw <id1> [id2 ...]         Remove entries by id (confirm)\n");
     printw("  version                       Show version and author info\n");
     printw("  lock                          Lock vault and require master password\n");
+    printw("  history                       Show command history log\n");
+    printw("  history clear                 Clear command history log\n");
     printw("  clear                         Clear screen\n");
     printw("  quit/exit/q                   Exit\n");
     attroff(COLOR_PAIR(BODY_PAIR));
@@ -1121,6 +1473,7 @@ static bool unlock_vault(Database *db, char *master) {
         if (load_database(db, db_path, master)) {
             db_status = DB_STATUS_ONLINE;
             ui_draw_header(db_status);
+            touch_activity();
             return true;
         }
         ui_show_message("Unlock failed", "Invalid password or corrupted DB.", 1500, true);
@@ -1131,15 +1484,20 @@ static bool unlock_vault(Database *db, char *master) {
 
 /* Main loop */
 int main(int argc, char **argv) {
-    /* Resolve DB path */
+    /* Resolve DB and log paths */
     if (getuid() == 0) {
         snprintf(db_path, sizeof(db_path), "/var/lib/%s/%s", PROGRAM_NAME, "vault.db");
+        snprintf(log_path, sizeof(log_path), "/var/log/%s", "vault.log");
     } else {
         const char *home = getenv("HOME");
         if (!home) home = ".";
         snprintf(db_path, sizeof(db_path), "%s/.vault.db", home);
+        snprintf(log_path, sizeof(log_path), "%s/.vault.log", home);
     }
     ensure_dir_for_path(db_path);
+    ensure_dir_for_path(log_path);
+    FILE *lf = fopen(log_path, "a"); /* create if missing */
+    if (lf) fclose(lf);
 
     /* CLI flags */
     for (int i = 1; i < argc; ++i) {
@@ -1183,6 +1541,7 @@ int main(int argc, char **argv) {
         db_status = DB_STATUS_ONLINE;
         ui_draw_header(db_status);
         new_db_created = true;
+        touch_activity();
     }
 
     int attempts = 0;
@@ -1200,6 +1559,7 @@ int main(int argc, char **argv) {
             loaded = true;
             db_status = DB_STATUS_ONLINE;
             ui_draw_header(db_status);
+            touch_activity();
         } else {
             ui_show_message("Unlock failed", "Invalid password or corrupted DB.", 1500, true);
             attempts++;
@@ -1213,13 +1573,15 @@ int main(int argc, char **argv) {
     }
     if (!new_db_created) {
         ui_show_message("Unlocked", "Vault decrypted.\nType \"help\" to see available commands.", 4000, true);
+        touch_activity();
     }
 
     char input_line[MAX_LINE];
     char *tokens[16];
     while (true) {
-        if (!prompt_command("> ", input_line, sizeof(input_line))) break;
+        if (!prompt_command(&db, "> ", input_line, sizeof(input_line))) break;
         if (strlen(input_line) == 0) continue;
+        append_log_entry(input_line);
 
         int token_count = 0;
         char *tok = strtok(input_line, " ");
@@ -1277,6 +1639,12 @@ int main(int argc, char **argv) {
             if (!unlock_vault(&db, master)) {
                 ui_show_message("Unlock failed", "Exiting...", 1500, true);
                 break;
+            }
+        } else if (strcmp(tokens[0], "history") == 0) {
+            if (token_count >= 2 && strcmp(tokens[1], "clear") == 0) {
+                clear_history_log();
+            } else {
+                show_history_log();
             }
         } else if (strcmp(tokens[0], "quit") == 0 || strcmp(tokens[0], "exit") == 0 || strcmp(tokens[0], "q") == 0) {
             save_database(&db, db_path, master);
