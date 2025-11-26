@@ -31,6 +31,8 @@
 #define BODY_COLOR_ID 10
 #define ERROR_COLOR_ID 11
 #define STATUS_OFF_COLOR_ID 12
+#define BODY_START_ROW 3
+#define MAX_PATH_LEN 512
 
 typedef struct {
     int id;
@@ -52,7 +54,6 @@ typedef struct {
 } Database;
 
 static const char *HEADER = "id,description,user,password,url,comment,tags,createdate,updatedate,status";
-static const char *DB_PATH = "vault.db";
 static const char *PROGRAM_NAME = "vaultdb";
 static const char *PROGRAM_VERSION = "0.1.0";
 static const char *PROGRAM_AUTHOR = "Robert Tulke <rt@debian.sh>";
@@ -61,6 +62,7 @@ static const char *PROGRAM_LICENSE = "MIT";
 static const char *DB_STATUS_OFFLINE = "locked";
 static const char *DB_STATUS_ONLINE = "unlocked";
 static const char *db_status = "locked";
+static char db_path[MAX_PATH_LEN] = "vault.db";
 
 static void generate_password(char *out, size_t max_len, int length, int mode);
 
@@ -79,6 +81,17 @@ static int strcasecmp_portable(const char *a, const char *b) {
 static bool file_exists(const char *path) {
     struct stat st;
     return stat(path, &st) == 0;
+}
+
+static void ensure_dir_for_path(const char *path) {
+    char tmp[MAX_PATH_LEN];
+    strncpy(tmp, path, sizeof(tmp) - 1);
+    tmp[sizeof(tmp) - 1] = '\0';
+    char *slash = strrchr(tmp, '/');
+    if (!slash) return;
+    *slash = '\0';
+    if (strlen(tmp) == 0) return;
+    mkdir(tmp, 0700);
 }
 
 static void xor_buffer(unsigned char *data, size_t len, const char *key) {
@@ -116,7 +129,8 @@ static void init_colors(void) {
     use_default_colors();
     short frame_fg = COLOR_CYAN;
     short title_fg = COLOR_YELLOW;
-    short body_fg = COLOR_WHITE;
+    /* Use default fg to respect light/dark terminal themes */
+    short body_fg = -1;
     short error_fg = COLOR_RED;
     short status_off_fg = COLOR_BLACK;
     if (can_change_color()) {
@@ -154,24 +168,14 @@ static void ui_draw_header(const char *status) {
         attroff(COLOR_PAIR(STATUS_OFF_PAIR));
     }
 
-    char center[128];
-    snprintf(center, sizeof(center), "%s v%s", PROGRAM_NAME, PROGRAM_VERSION);
-    int len = (int)strlen(center);
-    int cx = (COLS - len) / 2;
-    if (cx > 0) {
-        attron(COLOR_PAIR(FRAME_PAIR));
-        mvprintw(0, cx, "%s", PROGRAM_NAME);
-        attroff(COLOR_PAIR(FRAME_PAIR));
-        mvprintw(0, cx + (int)strlen(PROGRAM_NAME), " v");
-        attron(COLOR_PAIR(BODY_PAIR));
-        printw("%s", PROGRAM_VERSION);
-        attroff(COLOR_PAIR(BODY_PAIR));
-    }
+    attron(COLOR_PAIR(FRAME_PAIR));
+    mvprintw(0, (COLS - (int)strlen(PROGRAM_NAME)) / 2, "%s", PROGRAM_NAME);
+    attroff(COLOR_PAIR(FRAME_PAIR));
     /* spacer lines */
-    move(1, 0);
-    clrtoeol();
-    move(2, 0);
-    clrtoeol();
+    for (int r = 1; r < BODY_START_ROW; ++r) {
+        move(r, 0);
+        clrtoeol();
+    }
     refresh();
 }
 
@@ -198,8 +202,8 @@ static void ui_draw_divider(void) {
 }
 
 static void ui_clear_body(void) {
-    move(3, 0);
-    for (int r = 3; r < LINES - 2; ++r) {
+    move(BODY_START_ROW, 0);
+    for (int r = BODY_START_ROW; r < LINES - 2; ++r) {
         move(r, 0);
         clrtoeol();
     }
@@ -226,7 +230,8 @@ static void ui_center_box(const char *title, const char *body) {
         }
     }
 
-    int width = max_len + 4;
+    /* Extra column to keep one leading space between border and text */
+    int width = max_len + 5;
     if (title && (int)strlen(title) + 4 > width) width = (int)strlen(title) + 4;
     if (width < 30) width = 30;
     if (width > COLS - 2) width = COLS - 2;
@@ -263,10 +268,24 @@ static void ui_center_box(const char *title, const char *body) {
     }
     attron(COLOR_PAIR(BODY_PAIR));
     int y = title ? 3 : 2;
-    for (int i = 0; i < body_lines && y < height - 1; ++i) {
-        mvprintw(starty + y, startx + 2, "%s", lines[i]);
+    int inner_text = width - 4; /* leave 1 space each side */
+    for (int i = 0; i < body_lines && y < height - 2; ++i) {
+        int printable = inner_text - 1; /* leading space inside box */
+        if (printable < 0) printable = 0;
+        mvprintw(starty + y, startx + 2, " %-*.*s", printable, printable, lines[i]);
         y++;
     }
+    /* ensure one blank line before footer */
+    int footer_y = starty + height - 2;
+    int blank_y = footer_y - 1;
+    if (blank_y >= starty + 2) {
+        mvprintw(blank_y, startx + 2, "%-*s", inner_text, "");
+    }
+    /* footer with version bottom-right inside box, leaving 1 space from border */
+    int footer_len = (int)(strlen(PROGRAM_NAME) + strlen(PROGRAM_VERSION) + 3);
+    int footer_x = startx + width - 2 - 1 - footer_len;
+    if (footer_x < startx + 2) footer_x = startx + 2;
+    mvprintw(footer_y, footer_x, "%s v%s", PROGRAM_NAME, PROGRAM_VERSION);
     attroff(COLOR_PAIR(BODY_PAIR));
 
     ui_draw_divider();
@@ -798,8 +817,8 @@ static void generate_password(char *out, size_t max_len, int length, int mode) {
 /* CRUD helpers */
 static void add_entry(Database *db) {
     if (db->count >= MAX_ENTRIES) {
-        ui_clear_body();
-        move(1, 0);
+    ui_clear_body();
+    move(BODY_START_ROW, 0);
         print_error_line("Database full.");
         return;
     }
@@ -834,13 +853,13 @@ static Entry *find_entry_by_id(Database *db, int id) {
 static void change_entry(Database *db, int id) {
     Entry *e = find_entry_by_id(db, id);
     if (!e) {
-        ui_clear_body();
-        move(1, 0);
+    ui_clear_body();
+    move(BODY_START_ROW, 0);
         print_error_line("Entry not found.");
         return;
     }
     ui_clear_body();
-    move(1, 0);
+    move(BODY_START_ROW, 0);
     wizard_fill_entry(e, e->user);
     now_string(e->updatedate, sizeof(e->updatedate));
     printw("Updated entry %d\n", id);
@@ -850,7 +869,7 @@ static void change_entry(Database *db, int id) {
 static void change_passwords_for_user(Database *db, const char *user) {
     char input[MAX_LINE];
     ui_clear_body();
-    move(1, 0);
+    move(BODY_START_ROW, 0);
     printw("Are you sure you want to change all passwords for user '%s'? (y/n): ", user);
     read_line(input, sizeof(input));
     if (tolower((unsigned char)input[0]) != 'y') {
@@ -895,7 +914,7 @@ static void change_passwords_for_user(Database *db, const char *user) {
 static void remove_entries(Database *db, int *ids, size_t id_count) {
     char input[MAX_LINE];
     ui_clear_body();
-    move(1, 0);
+    move(BODY_START_ROW, 0);
     printw("Are you sure you want to delete ");
     for (size_t i = 0; i < id_count; ++i) {
         printw("%d%s", ids[i], (i + 1 < id_count) ? " " : "");
@@ -928,7 +947,7 @@ static void remove_entries(Database *db, int *ids, size_t id_count) {
 /* Commands */
 static void print_help(void) {
     ui_clear_body();
-    move(1, 0);
+    move(BODY_START_ROW, 0);
     print_separator();
     attron(COLOR_PAIR(BODY_PAIR));
     printw("Commands:\n");
@@ -955,7 +974,7 @@ static void print_help(void) {
 
 static void show_filtered(const Database *db, const int *indexes, size_t count) {
     ui_clear_body();
-    move(1, 0);
+    move(BODY_START_ROW, 0);
     if (count == 0) {
         print_error_line("No entries found.");
         return;
@@ -1028,18 +1047,18 @@ static void handle_show(Database *db, char **tokens, int token_count) {
         Entry *e = find_entry_by_id(db, id);
         if (!e) {
             ui_clear_body();
-            move(1, 0);
+            move(BODY_START_ROW, 0);
             print_error_line("Not found.");
         } else {
             ui_clear_body();
-            move(1, 0);
+            move(BODY_START_ROW, 0);
             print_entry_detail(e);
             refresh();
         }
         return;
     }
     ui_clear_body();
-    move(1, 0);
+    move(BODY_START_ROW, 0);
     print_error_line("Invalid show command.");
 }
 
@@ -1099,7 +1118,7 @@ static bool unlock_vault(Database *db, char *master) {
             attempts++;
             continue;
         }
-        if (load_database(db, DB_PATH, master)) {
+        if (load_database(db, db_path, master)) {
             db_status = DB_STATUS_ONLINE;
             ui_draw_header(db_status);
             return true;
@@ -1112,6 +1131,16 @@ static bool unlock_vault(Database *db, char *master) {
 
 /* Main loop */
 int main(int argc, char **argv) {
+    /* Resolve DB path */
+    if (getuid() == 0) {
+        snprintf(db_path, sizeof(db_path), "/var/lib/%s/%s", PROGRAM_NAME, "vault.db");
+    } else {
+        const char *home = getenv("HOME");
+        if (!home) home = ".";
+        snprintf(db_path, sizeof(db_path), "%s/.vault.db", home);
+    }
+    ensure_dir_for_path(db_path);
+
     /* CLI flags */
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
@@ -1130,14 +1159,14 @@ int main(int argc, char **argv) {
     ui_init();
     ui_clear_body();
     ui_draw_header(db_status);
-    move(1, 0);
+    move(BODY_START_ROW, 0);
     attron(COLOR_PAIR(BODY_PAIR));
     printw("Simple Vault\n");
-    printw("Database file: %s\n\n", DB_PATH);
+    printw("Database file: %s\n\n", db_path);
     attroff(COLOR_PAIR(BODY_PAIR));
     refresh();
 
-    bool db_exists = file_exists(DB_PATH);
+    bool db_exists = file_exists(db_path);
     bool new_db_created = false;
     if (!db_exists) {
         if (!prompt_master_password(master, sizeof(master), true)) {
@@ -1145,7 +1174,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "Could not set master password.\n");
             return 1;
         }
-        if (!save_database(&db, DB_PATH, master)) {
+        if (!save_database(&db, db_path, master)) {
             ui_shutdown();
             fprintf(stderr, "Failed to initialize database.\n");
             return 1;
@@ -1167,7 +1196,7 @@ int main(int argc, char **argv) {
             attempts++;
             continue;
         }
-        if (load_database(&db, DB_PATH, master)) {
+        if (load_database(&db, db_path, master)) {
             loaded = true;
             db_status = DB_STATUS_ONLINE;
             ui_draw_header(db_status);
@@ -1206,14 +1235,14 @@ int main(int argc, char **argv) {
             handle_show(&db, tokens, token_count);
         } else if (strcmp(tokens[0], "add") == 0 && token_count >= 2 && strcmp(tokens[1], "pw") == 0) {
             add_entry(&db);
-            save_database(&db, DB_PATH, master);
+            save_database(&db, db_path, master);
         } else if (strcmp(tokens[0], "change") == 0 && token_count == 2) {
             int id = atoi(tokens[1]);
             change_entry(&db, id);
-            save_database(&db, DB_PATH, master);
+            save_database(&db, db_path, master);
         } else if (strcmp(tokens[0], "change") == 0 && token_count == 3 && strcmp(tokens[1], "pw") == 0) {
             change_passwords_for_user(&db, tokens[2]);
-            save_database(&db, DB_PATH, master);
+            save_database(&db, db_path, master);
         } else if (strcmp(tokens[0], "rm") == 0 && token_count >= 3 && strcmp(tokens[1], "pw") == 0) {
             int ids[14];
             size_t id_count = 0;
@@ -1221,10 +1250,10 @@ int main(int argc, char **argv) {
                 ids[id_count++] = atoi(tokens[i]);
             }
             remove_entries(&db, ids, id_count);
-            save_database(&db, DB_PATH, master);
+            save_database(&db, db_path, master);
         } else if (strcmp(tokens[0], "version") == 0) {
             ui_clear_body();
-            move(1, 0);
+            move(BODY_START_ROW, 0);
             attron(COLOR_PAIR(FRAME_PAIR));
             printw("%s", PROGRAM_NAME);
             attroff(COLOR_PAIR(FRAME_PAIR));
@@ -1238,11 +1267,11 @@ int main(int argc, char **argv) {
             ui_clear_body();
             refresh();
         } else if (strcmp(tokens[0], "lock") == 0) {
-            save_database(&db, DB_PATH, master);
+            save_database(&db, db_path, master);
             db_status = DB_STATUS_OFFLINE;
             ui_draw_header(db_status);
             ui_clear_body();
-            move(1, 0);
+            move(BODY_START_ROW, 0);
             printw("Vault locked. Enter master password to continue.\n");
             refresh();
             if (!unlock_vault(&db, master)) {
@@ -1250,11 +1279,11 @@ int main(int argc, char **argv) {
                 break;
             }
         } else if (strcmp(tokens[0], "quit") == 0 || strcmp(tokens[0], "exit") == 0 || strcmp(tokens[0], "q") == 0) {
-            save_database(&db, DB_PATH, master);
+            save_database(&db, db_path, master);
             break;
         } else {
             ui_clear_body();
-            move(1, 0);
+            move(BODY_START_ROW, 0);
             print_error_line("Unknown command. Type 'help'.");
         }
     }
