@@ -35,6 +35,7 @@
 #define STATUS_OFF_COLOR_ID 12
 #define BODY_START_ROW 3
 #define MAX_PATH_LEN 512
+#define HISTORY_MAX 256
 
 typedef struct {
     int id;
@@ -69,6 +70,8 @@ static char db_path[MAX_PATH_LEN] = "vault.db";
 static char log_path[MAX_PATH_LEN] = "";
 static time_t last_activity = 0;
 static volatile sig_atomic_t cancel_requested = 0;
+static char history[HISTORY_MAX][MAX_LINE];
+static size_t history_count = 0;
 
 /* Forward declarations for UI helpers used by logging */
 static void ui_clear_body(void);
@@ -186,6 +189,20 @@ static void log_action(const char *fmt, ...) {
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
     append_log_entry(buf);
+}
+
+static void add_history_entry(const char *cmd) {
+    if (!cmd || cmd[0] == '\0') return;
+    if (history_count > 0 && strcmp(history[history_count - 1], cmd) == 0) return;
+    if (history_count < HISTORY_MAX) {
+        strncpy(history[history_count], cmd, MAX_LINE - 1);
+        history[history_count][MAX_LINE - 1] = '\0';
+        history_count++;
+    } else {
+        memmove(history, history + 1, (HISTORY_MAX - 1) * MAX_LINE);
+        strncpy(history[HISTORY_MAX - 1], cmd, MAX_LINE - 1);
+        history[HISTORY_MAX - 1][MAX_LINE - 1] = '\0';
+    }
 }
 
 static void cancelled_and_clear(void) {
@@ -719,6 +736,7 @@ static bool read_command_line(const Database *db, char *buffer, size_t size) {
     size_t len = 0;
     size_t cursor = 0;
     bool tab_pending = false;
+    int hist_pos = -1; /* -1 means no history selection */
     buffer[0] = '\0';
     attrset(COLOR_PAIR(BODY_PAIR));
     noecho();
@@ -809,6 +827,37 @@ static bool read_command_line(const Database *db, char *buffer, size_t size) {
                 move(starty, startx + (int)cursor);
                 refresh();
             }
+            continue;
+        }
+        if (ch == KEY_UP) {
+            if (history_count == 0) continue;
+            if (hist_pos < 0) {
+                hist_pos = (int)history_count - 1;
+            } else if (hist_pos > 0) {
+                hist_pos--;
+            }
+            strncpy(buffer, history[hist_pos], size - 1);
+            buffer[size - 1] = '\0';
+            len = strlen(buffer);
+            cursor = len;
+            redraw_input_line(starty, startx, buffer, size, cursor);
+            continue;
+        }
+        if (ch == KEY_DOWN) {
+            if (hist_pos < 0) continue;
+            hist_pos++;
+            if (hist_pos >= (int)history_count) {
+                hist_pos = -1;
+                buffer[0] = '\0';
+                len = 0;
+                cursor = 0;
+            } else {
+                strncpy(buffer, history[hist_pos], size - 1);
+                buffer[size - 1] = '\0';
+                len = strlen(buffer);
+                cursor = len;
+            }
+            redraw_input_line(starty, startx, buffer, size, cursor);
             continue;
         }
         if (ch == 11) { /* Ctrl+K */
@@ -1893,6 +1942,7 @@ int main(int argc, char **argv) {
         if (!prompt_command(&db, "> ", input_line, sizeof(input_line))) break;
         if (strlen(input_line) == 0) continue;
         append_log_entry(input_line);
+        add_history_entry(input_line);
 
         int token_count = 0;
         char *tok = strtok(input_line, " ");

@@ -108,6 +108,7 @@ Interactive vault for keeping test credentials: add, view, edit, delete entries 
 | `Ctrl+U` | Delete from start of line to cursor. |
 | `Ctrl+W` | Delete previous word. |
 | `Ctrl+L` | Clear screen and redraw prompt. |
+| `Arrow Up/Down` | Browse session command history and recall previous inputs. |
 | `Tab` / double `Tab` | Trigger command completion and show suggestions. |
 
 ## Features
