@@ -20,6 +20,10 @@ Let `P` be a plaintext byte and `K` the matching byte of the key. The stored byt
 ## Installation
 Prerequisites: C11-compatible compiler and `ncurses` development headers.
 
+Clone from GitHub
+```sh
+
+
 Build locally:
 ```sh
 make
