@@ -1365,33 +1365,27 @@ static void print_separator(void) {
 
 static void print_entry_table(const Database *db, const int *indexes, size_t index_count) {
     const char *hidden_pw = "********";
-    size_t w_desc = 11, w_user = 6, w_pw = strlen(hidden_pw), w_url = 6, w_tags = 6, w_cd = 6, w_ud = 6, w_status = 6;
+    size_t w_desc = 11, w_user = 6, w_pw = strlen(hidden_pw), w_tags = 6, w_status = 6;
     for (size_t i = 0; i < index_count; ++i) {
         const Entry *e = &db->items[indexes[i]];
         if (strlen(e->description) > w_desc) w_desc = strlen(e->description);
         if (strlen(e->user) > w_user) w_user = strlen(e->user);
-        if (strlen(e->url) > w_url) w_url = strlen(e->url);
         if (strlen(e->tags) > w_tags) w_tags = strlen(e->tags);
-        if (strlen(e->createdate) > w_cd) w_cd = strlen(e->createdate);
-        if (strlen(e->updatedate) > w_ud) w_ud = strlen(e->updatedate);
         if (strlen(e->status) > w_status) w_status = strlen(e->status);
     }
     if (w_desc > 40) w_desc = 40;
     if (w_user > 20) w_user = 20;
     if (w_pw > 24) w_pw = 24;
-    if (w_url > 32) w_url = 32;
     if (w_tags > 24) w_tags = 24;
+    if (w_status > 24) w_status = 24;
 
     print_separator();
     attron(COLOR_PAIR(BODY_PAIR));
-    printw("%-4s %-*s %-*s %-*s %-*s %-*s %-*s %-*s %-*s\n", "ID",
+    printw("%-4s %-*s %-*s %-*s %-*s %-*s\n", "ID",
            (int)w_desc, "Description",
            (int)w_user, "User",
            (int)w_pw, "Password",
-           (int)w_url, "URL",
            (int)w_tags, "Tags",
-           (int)w_cd, "Created",
-           (int)w_ud, "Updated",
            (int)w_status, "Status");
     attroff(COLOR_PAIR(BODY_PAIR));
     print_separator();
@@ -1399,15 +1393,12 @@ static void print_entry_table(const Database *db, const int *indexes, size_t ind
     for (size_t i = 0; i < index_count; ++i) {
         const Entry *e = &db->items[indexes[i]];
         attron(COLOR_PAIR(BODY_PAIR));
-        printw("%-4d %-*.*s %-*.*s %-*.*s %-*.*s %-*.*s %-*.*s %-*.*s %-*.*s\n",
+        printw("%-4d %-*.*s %-*.*s %-*.*s %-*.*s %-*.*s\n",
                e->id,
                (int)w_desc, (int)w_desc, e->description,
                (int)w_user, (int)w_user, e->user,
                (int)w_pw, (int)w_pw, hidden_pw,
-               (int)w_url, (int)w_url, e->url,
                (int)w_tags, (int)w_tags, e->tags,
-               (int)w_cd, (int)w_cd, e->createdate,
-               (int)w_ud, (int)w_ud, e->updatedate,
                (int)w_status, (int)w_status, e->status);
         attroff(COLOR_PAIR(BODY_PAIR));
     }
