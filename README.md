@@ -145,6 +145,8 @@ Enumerates every combination in the length range using charset presets:
 
 Example runs:
 
+On an Apple M4 MacBook Pro (10 performance/efficiency cores visible), omitting `--workers` uses all detected cores. Specifying `--workers N` caps parallelism (e.g., `--workers 4` uses 4 workers even if 10 are available).
+
 ```sh
 # Minimal wordlist run with default DB — runtime depends on list size; a few million entries finish in seconds.
 python3 scripts/bruteforce.py wordlist --wordlist /tmp/rockyou.txt
@@ -183,4 +185,9 @@ python3 scripts/bruteforce.py exhaustive --min-len 3 --max-len 3 --charset custo
 ```sh
 # Exhaustive: run quietly (no progress logs) — letters len 4 => 26^4≈456k combos; sub-second to a couple seconds.
 python3 scripts/bruteforce.py exhaustive --min-len 4 --max-len 4 --charset letters --quiet
+```
+
+```sh
+# Exhaustive: common-special, len 4–8, auto-workers (~10 on an M4) — search space ~5×10^15 combos; even at ~100M/s aggregate this would take ~1.6 years, so use smaller ranges or wordlists instead.
+python3 scripts/bruteforce.py exhaustive --min-len 4 --max-len 8 --charset common-special
 ```
