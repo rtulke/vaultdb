@@ -132,15 +132,29 @@ def brute_force_exhaustive(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Brute-force vaultdb master password (testing only).")
+    parser = argparse.ArgumentParser(
+        description="Brute-force vaultdb master password (testing only).",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
     sub = parser.add_subparsers(dest="mode", required=True)
+    subparsers = {}
 
-    p_wordlist = sub.add_parser("wordlist", help="Try passwords from a wordlist file")
-    p_wordlist.add_argument("--db", default="~/.vault.db", help="Path to vault database (default: ~/.vault.db)")
+    p_wordlist = sub.add_parser(
+        "wordlist",
+        help="Try passwords from a wordlist file",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    subparsers["wordlist"] = p_wordlist
+    p_wordlist.add_argument("--db", default="~/.vault.db", help="Path to vault database")
     p_wordlist.add_argument("--wordlist", required=True, help="Path to wordlist file (one password per line)")
 
-    p_exhaust = sub.add_parser("exhaustive", help="Generate and try all combinations in a length range")
-    p_exhaust.add_argument("--db", default="~/.vault.db", help="Path to vault database (default: ~/.vault.db)")
+    p_exhaust = sub.add_parser(
+        "exhaustive",
+        help="Generate and try all combinations in a length range",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    subparsers["exhaustive"] = p_exhaust
+    p_exhaust.add_argument("--db", default="~/.vault.db", help="Path to vault database")
     p_exhaust.add_argument("--min-len", type=int, required=True, help="Minimum key length to try")
     p_exhaust.add_argument("--max-len", type=int, required=True, help="Maximum key length to try")
     p_exhaust.add_argument(
@@ -159,9 +173,21 @@ def main() -> int:
     )
     p_exhaust.add_argument(
         "--special",
-        help="Override special characters for presets including specials (e.g. \"~!@#%$\")",
+        help="Override special characters for presets including specials (e.g. \"~!@#$%%^&\")",
     )
-    p_exhaust.add_argument("--workers", type=int, help="Number of parallel workers (default: detected CPU cores)")
+    p_exhaust.add_argument(
+        "--workers",
+        type=int,
+        help="Number of parallel workers (default: detected CPU cores)",
+    )
+
+    # If only top-level help was requested, show detailed help for subcommands too.
+    if len(sys.argv) == 1 or "-h" in sys.argv or "--help" in sys.argv:
+        parser.print_help()
+        print("\nSubcommand details:\n")
+        for name, sp in subparsers.items():
+            print(sp.format_help())
+        return 0
 
     args = parser.parse_args()
 
