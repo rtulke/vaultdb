@@ -105,12 +105,12 @@ Interactive vault for keeping test credentials: add, view, edit, delete entries 
 - Wizard-driven entry creation and edits, including optional password generation.
 
 ## Brute-force testing helpers
-For demonstrations only—do not use these for unauthorized access.
+Purpose-built for demonstrations to highlight the weak XOR obfuscation. Do not use for unauthorized access.
 
-- Wordlist-based: `python3 scripts/bruteforce.py wordlist --db ~/.vault.db --wordlist /path/to/wordlist.txt`
-  - Tries each line in the wordlist as the master password until the CSV header decrypts.
-- Exhaustive generator: `python3 scripts/bruteforce.py exhaustive --db ~/.vault.db --min-len 4 --max-len 6 --charset alnum-special --special \"%$#-+.\" --workers 4`
-  - Generates all combinations in the length range using charset presets:
+- Wordlist mode: `python3 scripts/bruteforce.py wordlist --db ~/.vault.db --wordlist /path/to/wordlist.txt`
+  - Reads candidates from the wordlist until the CSV header decrypts.
+- Exhaustive mode: `python3 scripts/bruteforce.py exhaustive --db ~/.vault.db --min-len 4 --max-len 6 --charset alnum-special --special \"%$#-+.\" --workers 4`
+  - Enumerates every combination in the length range using charset presets:
     - `digits`, `letters`, `alnum`, `special`, `digits-special`, `letters-special`, `alnum-special`
   - `--special` overrides the special-character set for presets that include specials.
-  - `--workers` controls parallel processes (default: detected CPU cores). Longer ranges explode combinatorially; keep lengths small for tests.
+  - `--workers` sets parallel processes (default: detected CPU cores). Note that search space grows exponentially with length; keep ranges small for tests.
