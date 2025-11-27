@@ -71,13 +71,18 @@ def exhaustive_worker(
     stop: mp.Event,
     found_queue: mp.Queue,
 ) -> None:
+    chars = list(charset)
+    subset = chars[worker_id::workers] or chars
     for length in lengths:
-        products = itertools.product(charset, repeat=length)
-        for idx, combo in enumerate(products):
+        if stop.is_set():
+            return
+        if length == 1:
+            products = ((c,) for c in subset)
+        else:
+            products = ((c,) + tail for c in subset for tail in itertools.product(chars, repeat=length - 1))
+        for combo in products:
             if stop.is_set():
                 return
-            if idx % workers != worker_id:
-                continue
             candidate_str = "".join(combo)
             candidate_bytes = candidate_str.encode("utf-8", "ignore")
             if header_matches(cipher_prefix, candidate_bytes):
