@@ -368,6 +368,7 @@ static bool handle_completion(const Database *db, char *buffer, size_t *idx, siz
         } else if (strcmp(cmd, "change") == 0) {
             if (token_count == 1 || (token_count == 2 && !ends_with_space)) {
                 ADD_CAND("pw");
+                ADD_CAND("master-pw");
                 char ids[128][MAX_LINE];
                 size_t idc = gather_ids(db, ids, 128);
                 for (size_t i = 0; i < idc; ++i) ADD_CAND(ids[i]);
@@ -1470,6 +1471,47 @@ static void change_passwords_for_user(Database *db, const char *user) {
     refresh();
 }
 
+static bool change_master_password(Database *db, char *master) {
+    char new_pw[MAX_PASSWORD + 1];
+    char confirm[MAX_PASSWORD + 1];
+    while (1) {
+        if (!prompt_password("New master password: ", new_pw, sizeof(new_pw))) {
+            return false;
+        }
+        if (strlen(new_pw) < 8) {
+            ui_draw_divider();
+            move(LINES - 1, 0);
+            clrtoeol();
+            printw("Password too short (min 8).");
+            refresh();
+            napms(1500);
+            continue;
+        }
+        if (!prompt_password("Type again: ", confirm, sizeof(confirm))) {
+            return false;
+        }
+        if (strcmp(new_pw, confirm) != 0) {
+            ui_draw_divider();
+            move(LINES - 1, 0);
+            clrtoeol();
+            printw("Password mismatch. Try again.");
+            refresh();
+            napms(1500);
+            continue;
+        }
+        break;
+    }
+    if (!save_database(db, db_path, new_pw)) {
+        ui_show_message("Error", "Failed to save database with new master password.", 2000, true);
+        return false;
+    }
+    strncpy(master, new_pw, MAX_PASSWORD);
+    master[MAX_PASSWORD] = '\0';
+    ui_show_message("Master password changed", "", 1200, true);
+    touch_activity();
+    return true;
+}
+
 static void remove_entries(Database *db, int *ids, size_t id_count) {
     char input[MAX_LINE];
     ui_clear_body();
@@ -1519,6 +1561,7 @@ static void print_help(void) {
     printw("  add pw                        Add new password (wizard)\n");
     printw("  change <id>                   Edit entry fields (wizard)\n");
     printw("  change pw <user>              Change all passwords for user\n");
+    printw("  change master-pw              Set a new master password (confirm)\n");
     printw("  rm pw <id1> [id2 ...]         Remove entries by id (confirm)\n");
     printw("  version                       Show version and author info\n");
     printw("  lock                          Lock vault and require master password\n");
@@ -1805,6 +1848,8 @@ int main(int argc, char **argv) {
         } else if (strcmp(tokens[0], "add") == 0 && token_count >= 2 && strcmp(tokens[1], "pw") == 0) {
             add_entry(&db);
             save_database(&db, db_path, master);
+        } else if (strcmp(tokens[0], "change") == 0 && token_count == 2 && strcmp(tokens[1], "master-pw") == 0) {
+            change_master_password(&db, master);
         } else if (strcmp(tokens[0], "change") == 0 && token_count == 2) {
             int id = atoi(tokens[1]);
             change_entry(&db, id);
