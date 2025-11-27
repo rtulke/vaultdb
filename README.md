@@ -22,8 +22,11 @@ Prerequisites: C11-compatible compiler and `ncurses` development headers.
 
 Clone from GitHub
 ```sh
-
-
+# Prepare the dev directory, change it if it differs from yours ;-):
+mkdir ~/dev/
+cd ~/dev/
+git clone https://github.com/rtulke/vaultdb.git
+```
 Build locally:
 ```sh
 make
