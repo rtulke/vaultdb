@@ -10,6 +10,7 @@ import itertools
 import multiprocessing as mp
 import string
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -42,7 +43,7 @@ def brute_force_wordlist(db_path: Path, wordlist_path: Path) -> Optional[str]:
     return None
 
 
-def build_charset(preset: str, custom_special: Optional[str]) -> str:
+def build_charset(preset: str, custom_special: Optional[str], custom_chars: Optional[str] = None) -> str:
     specials_default = ";.,#-_%&$+'"
     specials = custom_special if custom_special is not None else specials_default
     if preset == "digits":
@@ -59,6 +60,12 @@ def build_charset(preset: str, custom_special: Optional[str]) -> str:
         return string.ascii_letters + specials
     if preset == "alnum-special":
         return string.ascii_letters + string.digits + specials
+    if preset == "common-special":
+        return string.ascii_letters + string.digits + "!@#$%^&*()-_=+[]{};:'\",.<>/?`~"
+    if preset == "custom":
+        if not custom_chars:
+            raise ValueError("Custom charset requires --chars")
+        return custom_chars
     raise ValueError(f"Unknown charset preset: {preset}")
 
 
@@ -70,9 +77,15 @@ def exhaustive_worker(
     charset: str,
     stop: mp.Event,
     found_queue: mp.Queue,
+    attempts: mp.Value,
+    max_tries: Optional[int],
+    time_limit: Optional[float],
+    started: float,
+    max_matches: int,
 ) -> None:
     chars = list(charset)
     subset = chars[worker_id::workers] or chars
+    batch = 0
     for length in lengths:
         if stop.is_set():
             return
@@ -89,6 +102,21 @@ def exhaustive_worker(
                 found_queue.put(candidate_str)
                 stop.set()
                 return
+            batch += 1
+            if batch >= 1000:
+                with attempts.get_lock():
+                    attempts.value += batch
+                    current_attempts = attempts.value
+                batch = 0
+                if max_tries and current_attempts >= max_tries:
+                    stop.set()
+                    return
+                if time_limit and (time.monotonic() - started) >= time_limit:
+                    stop.set()
+                    return
+    if batch:
+        with attempts.get_lock():
+            attempts.value += batch
 
 
 def brute_force_exhaustive(
@@ -152,6 +180,11 @@ def main() -> int:
     subparsers["wordlist"] = p_wordlist
     p_wordlist.add_argument("--db", default="~/.vault.db", help="Path to vault database")
     p_wordlist.add_argument("--wordlist", required=True, help="Path to wordlist file (one password per line)")
+    p_wordlist.add_argument("--max-tries", type=int, help="Abort after this many candidates")
+    p_wordlist.add_argument("--time-limit", type=float, help="Abort after this many seconds")
+    p_wordlist.add_argument("--progress-every", type=int, default=100000, help="Print status every N candidates")
+    p_wordlist.add_argument("--max-matches", type=int, default=1, help="Stop after finding this many matches")
+    p_wordlist.add_argument("--quiet", action="store_true", help="Suppress progress output")
 
     p_exhaust = sub.add_parser(
         "exhaustive",
@@ -172,6 +205,8 @@ def main() -> int:
             "digits-special",
             "letters-special",
             "alnum-special",
+            "common-special",
+            "custom",
         ],
         default="alnum",
         help="Character set preset to use",
@@ -185,6 +220,15 @@ def main() -> int:
         type=int,
         help="Number of parallel workers (default: detected CPU cores)",
     )
+    p_exhaust.add_argument(
+        "--chars",
+        help="Custom character set when using --charset custom",
+    )
+    p_exhaust.add_argument("--max-tries", type=int, help="Abort after this many candidates")
+    p_exhaust.add_argument("--time-limit", type=float, help="Abort after this many seconds")
+    p_exhaust.add_argument("--progress-every", type=int, default=50000, help="Print status every N candidates")
+    p_exhaust.add_argument("--max-matches", type=int, default=1, help="Stop after finding this many matches")
+    p_exhaust.add_argument("--quiet", action="store_true", help="Suppress progress output")
 
     # If only top-level help was requested, show detailed help for subcommands too.
     if len(sys.argv) == 1 or "-h" in sys.argv or "--help" in sys.argv:
@@ -207,7 +251,31 @@ def main() -> int:
             print(f"Wordlist not found: {wl_path}", file=sys.stderr)
             return 1
         print(f"Brute-forcing {db_path} with {wl_path} (wordlist; testing only)...")
-        found = brute_force_wordlist(db_path, wl_path)
+        cipher = db_path.read_bytes()
+        prefix = cipher[: len(EXPECTED_HEADER)]
+        attempts = 0
+        found = []
+        start = time.monotonic()
+        with wl_path.open("rb") as wl:
+            for idx, line in enumerate(wl, 1):
+                candidate = line.rstrip(b"\r\n")
+                if not candidate:
+                    continue
+                attempts += 1
+                if args.max_tries and attempts > args.max_tries:
+                    print("Reached max tries; stopping.", file=sys.stderr)
+                    break
+                if args.time_limit and (time.monotonic() - start) >= args.time_limit:
+                    print("Reached time limit; stopping.", file=sys.stderr)
+                    break
+                if header_matches(prefix, candidate):
+                    found.append(candidate.decode("utf-8", errors="replace"))
+                    if len(found) >= args.max_matches:
+                        break
+                if not args.quiet and attempts % args.progress_every == 0:
+                    elapsed = time.monotonic() - start
+                    rate = attempts / elapsed if elapsed > 0 else 0
+                    print(f"Checked {attempts} candidates | {rate:.1f} attempts/sec", file=sys.stderr)
     else:
         if args.min_len <= 0 or args.max_len < args.min_len:
             print("Invalid length range.", file=sys.stderr)
@@ -218,19 +286,78 @@ def main() -> int:
             f"Brute-forcing {db_path} exhaustively (len {args.min_len}-{args.max_len}, charset {args.charset}, "
             f"workers {workers}; testing only)..."
         )
-        found = brute_force_exhaustive(
-            db_path=db_path,
-            min_len=args.min_len,
-            max_len=args.max_len,
-            charset=args.charset,
-            workers=workers,
-            custom_special=args.special,
-        )
+        cipher = db_path.read_bytes()
+        if len(cipher) < len(EXPECTED_HEADER):
+            print("Ciphertext shorter than header; aborting.", file=sys.stderr)
+            return 1
+        prefix = cipher[: len(EXPECTED_HEADER)]
+        charset = build_charset(args.charset, args.special, args.chars)
+        lengths = range(args.min_len, args.max_len + 1)
+        stop = mp.Event()
+        found_queue: mp.Queue[str] = mp.Queue()
+        attempts = mp.Value("L", 0)
+        start = time.monotonic()
+        procs = [
+            mp.Process(
+                target=exhaustive_worker,
+                args=(
+                    i,
+                    workers,
+                    prefix,
+                    lengths,
+                    charset,
+                    stop,
+                    found_queue,
+                    attempts,
+                    args.max_tries,
+                    args.time_limit,
+                    start,
+                    args.max_matches,
+                ),
+                daemon=True,
+            )
+            for i in range(workers)
+        ]
+        for p in procs:
+            p.start()
 
-    if found is None:
+        found = []
+        last_progress = start
+        try:
+            while any(p.is_alive() for p in procs):
+                if not found_queue.empty():
+                    try:
+                        candidate = found_queue.get_nowait()
+                        found.append(candidate)
+                        if len(found) >= args.max_matches:
+                            stop.set()
+                            break
+                    except Exception:
+                        pass
+                if args.time_limit and (time.monotonic() - start) >= args.time_limit:
+                    stop.set()
+                    print("Reached time limit; stopping.", file=sys.stderr)
+                    break
+                if args.max_tries and attempts.value >= args.max_tries:
+                    stop.set()
+                    print("Reached max tries; stopping.", file=sys.stderr)
+                    break
+                if not args.quiet and (attempts.value >= args.progress_every and (time.monotonic() - last_progress) >= 1):
+                    elapsed = time.monotonic() - start
+                    rate = attempts.value / elapsed if elapsed > 0 else 0
+                    print(f"Checked {attempts.value} candidates | {rate:.1f} attempts/sec", file=sys.stderr)
+                    last_progress = time.monotonic()
+                time.sleep(0.1)
+        finally:
+            stop.set()
+            for p in procs:
+                p.join()
+
+    if not found:
         print("No matching key found.")
         return 2
-    print(f"Possible master password: {found}")
+    for f in found:
+        print(f"Possible master password: {f}")
     return 0
 
 
