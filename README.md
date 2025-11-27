@@ -141,6 +141,7 @@ Enumerates every combination in the length range using charset presets:
 | `--progress-every N` | both | Print progress every N attempts (defaults: 100000 wordlist, 50000 exhaustive). |
 | `--max-matches N` | both | Stop after N matches (default: 1). |
 | `--quiet` | both | Suppress progress output. |
+| Charset presets | exhaustive | Available presets: `digits`, `letters`, `alnum`, `special`, `digits-special`, `letters-special`, `alnum-special`, `common-special`, `custom` (`--chars` required). |
 
 Example runs:
 
