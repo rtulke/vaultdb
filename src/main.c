@@ -1363,43 +1363,70 @@ static void print_separator(void) {
     addch('\n');
 }
 
+static void print_cell(const char *s, int width) {
+    if (width <= 0) return;
+    size_t len = strlen(s);
+    if ((int)len <= width) {
+        printw("%-*s", width, s);
+        return;
+    }
+    if (width >= 3) {
+        char buf[512];
+        int copy = width - 3;
+        if (copy > (int)sizeof(buf) - 4) copy = (int)sizeof(buf) - 4;
+        strncpy(buf, s, (size_t)copy);
+        buf[copy] = '\0';
+        strncat(buf, "...", sizeof(buf) - strlen(buf) - 1);
+        printw("%-*s", width, buf);
+    } else {
+        for (int i = 0; i < width && s[i]; ++i) addch(s[i]);
+    }
+}
+
 static void print_entry_table(const Database *db, const int *indexes, size_t index_count) {
     const char *hidden_pw = "********";
-    size_t w_desc = 11, w_user = 6, w_pw = strlen(hidden_pw), w_tags = 6, w_status = 6;
-    for (size_t i = 0; i < index_count; ++i) {
-        const Entry *e = &db->items[indexes[i]];
-        if (strlen(e->description) > w_desc) w_desc = strlen(e->description);
-        if (strlen(e->user) > w_user) w_user = strlen(e->user);
-        if (strlen(e->tags) > w_tags) w_tags = strlen(e->tags);
-        if (strlen(e->status) > w_status) w_status = strlen(e->status);
-    }
-    if (w_desc > 40) w_desc = 40;
-    if (w_user > 20) w_user = 20;
-    if (w_pw > 24) w_pw = 24;
-    if (w_tags > 24) w_tags = 24;
-    if (w_status > 24) w_status = 24;
+    const int var_cols = 5;
+    int spacing = var_cols; /* spaces between columns (ID + 5 cols => 5 spaces) */
+    int avail = COLS - 4 - spacing;
+    if (avail < var_cols * 6) avail = var_cols * 6;
+    int base = avail / var_cols;
+    int rem = avail % var_cols;
+    int w_desc = base + (rem > 0 ? 1 : 0);
+    int w_user = base + (rem > 1 ? 1 : 0);
+    int w_pw = base + (rem > 2 ? 1 : 0);
+    int w_tags = base + (rem > 3 ? 1 : 0);
+    int w_status = base + (rem > 4 ? 1 : 0);
 
     print_separator();
     attron(COLOR_PAIR(BODY_PAIR));
-    printw("%-4s %-*s %-*s %-*s %-*s %-*s\n", "ID",
-           (int)w_desc, "Description",
-           (int)w_user, "User",
-           (int)w_pw, "Password",
-           (int)w_tags, "Tags",
-           (int)w_status, "Status");
+    printw("%-4s ", "ID");
+    print_cell("Description", w_desc);
+    addch(' ');
+    print_cell("User", w_user);
+    addch(' ');
+    print_cell("Password", w_pw);
+    addch(' ');
+    print_cell("Tags", w_tags);
+    addch(' ');
+    print_cell("Status", w_status);
+    addch('\n');
     attroff(COLOR_PAIR(BODY_PAIR));
     print_separator();
 
     for (size_t i = 0; i < index_count; ++i) {
         const Entry *e = &db->items[indexes[i]];
         attron(COLOR_PAIR(BODY_PAIR));
-        printw("%-4d %-*.*s %-*.*s %-*.*s %-*.*s %-*.*s\n",
-               e->id,
-               (int)w_desc, (int)w_desc, e->description,
-               (int)w_user, (int)w_user, e->user,
-               (int)w_pw, (int)w_pw, hidden_pw,
-               (int)w_tags, (int)w_tags, e->tags,
-               (int)w_status, (int)w_status, e->status);
+        printw("%-4d ", e->id);
+        print_cell(e->description, w_desc);
+        addch(' ');
+        print_cell(e->user, w_user);
+        addch(' ');
+        print_cell(hidden_pw, w_pw);
+        addch(' ');
+        print_cell(e->tags, w_tags);
+        addch(' ');
+        print_cell(e->status, w_status);
+        addch('\n');
         attroff(COLOR_PAIR(BODY_PAIR));
     }
     print_separator();
