@@ -213,7 +213,7 @@ def main() -> int:
     )
     p_exhaust.add_argument(
         "--special",
-        help="Override special characters for presets including specials (e.g. \"~!@#$%%^&\")",
+        help="Override special characters for presets that include specials (e.g. \"~!@#$%%^&\")",
     )
     p_exhaust.add_argument(
         "--workers",
