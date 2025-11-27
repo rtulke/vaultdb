@@ -651,23 +651,32 @@ static bool read_line(char *buffer, size_t size) {
     attrset(COLOR_PAIR(BODY_PAIR));
     noecho();
     keypad(stdscr, TRUE);
+    timeout(200);
     while (1) {
+        if (cancel_requested) {
+            cancel_requested = 0;
+            buffer[0] = '\0';
+            timeout(-1);
+            return false;
+        }
         int ch = getch();
         if (ch == ERR) {
-            buffer[0] = '\0';
-            return false;
+            continue;
         }
         if (ch == 4) { /* Ctrl+D */
             buffer[0] = '\0';
+            timeout(-1);
             return false;
         }
         if (ch == 3) { /* Ctrl+C cancel */
             buffer[0] = '\0';
             cancel_requested = 1;
+            timeout(-1);
             return false;
         }
         if (ch == '\n' || ch == '\r') {
             buffer[idx] = '\0';
+            timeout(-1);
             return true;
         }
         if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) {
@@ -876,19 +885,26 @@ static bool read_password_obfuscated(char *buffer, size_t size) {
 
     noecho();
     keypad(stdscr, TRUE);
+    timeout(200);
     while (1) {
+        if (cancel_requested) {
+            cancel_requested = 0;
+            buffer[0] = '\0';
+            timeout(-1);
+            return false;
+        }
         int ch = getch();
+        if (ch == ERR) {
+            continue;
+        }
         if (ch == '\n' || ch == '\r') {
             buffer[idx] = '\0';
+            timeout(-1);
             return true;
         }
         if (ch == 4) { /* Ctrl+D */
             buffer[0] = '\0';
-            return false;
-        }
-        if (ch == 3 || cancel_requested) { /* Ctrl+C */
-            cancel_requested = 0;
-            buffer[0] = '\0';
+            timeout(-1);
             return false;
         }
         if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) {
@@ -903,6 +919,13 @@ static bool read_password_obfuscated(char *buffer, size_t size) {
             }
             continue;
         }
+        if (ch == 3 || cancel_requested) { /* Ctrl+C */
+            cancel_requested = 0;
+            buffer[0] = '\0';
+            timeout(-1);
+            return false;
+        }
+        if (!isprint(ch)) continue;
         if (idx + 1 >= size) continue;
         touch_activity();
         int stars = (rand() % 3) + 1;
