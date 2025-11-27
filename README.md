@@ -117,10 +117,18 @@ python3 scripts/bruteforce.py wordlist --db ~/.vault.db --wordlist /path/to/word
 ### Exhaustive mode
 
 ```sh
-python3 scripts/bruteforce.py exhaustive --db ~/.vault.db --min-len 4 --max-len 6 --charset alnum-special --special \"%$#-+.\" --workers 4`
+python3 scripts/bruteforce.py exhaustive --db ~/.vault.db --min-len 4 --max-len 6 --charset alnum-special --special "%$#-+." --workers 4
 ```
 Enumerates every combination in the length range using charset presets:
  - `digits`, `letters`, `alnum`, `special`, `digits-special`, `letters-special`, `alnum-special`
  - `--special` overrides the special-character set for presets that include specials.
  - `--workers` sets parallel processes (default: detected CPU cores). Note that search space grows exponentially with length; keep ranges small for tests.
- - Common special-character sets in real-world passwords often include symbols like `!@#$%^&*()-_=+[]{};:'",.<>/?`~`. Use `--special` to reflect the set you want to test.
+ - Common special-character sets in real-world passwords often include symbols like `!@#$%^&*()-_=+[]{};:'",.<>/?\`~`. Use `--special` to reflect the set you want to test.
+
+### Brute-force helper commands
+
+| Command | Purpose |
+| --- | --- |
+| `python3 scripts/bruteforce.py --help` | Show top-level and subcommand help. |
+| `python3 scripts/bruteforce.py wordlist --db ~/.vault.db --wordlist /path/to/wordlist.txt` | Try each password from a wordlist. |
+| `python3 scripts/bruteforce.py exhaustive --db ~/.vault.db --min-len 4 --max-len 6 --charset alnum-special --special "%$#-+." --workers 4` | Generate combinations in a length range using the given charset preset, optional custom specials, and parallel workers. |
