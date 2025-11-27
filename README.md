@@ -2,6 +2,11 @@
 
 Simple terminal-based password vault built with ncurses. It stores entries in a CSV-like file that is lightly obfuscated. Intended for learning and experimentation, **not** for protecting real secrets.
 
+## Platform Support
+- Built and run on macOS (Darwin, ncurses).
+- Expected to work on Linux and BSD variants with a C11 compiler and `ncurses` installed.
+- Windows support is not verified; use WSL or a curses layer such as PDCurses/WinLibc if attempting a native build.
+
 ## Security Notice
 - Data is only XOR-obfuscated with the master password; this is not cryptographically secure.
 - Use the program for testing and practice only; do not store sensitive credentials.
