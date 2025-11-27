@@ -96,6 +96,19 @@ Interactive vault for keeping test credentials: add, view, edit, delete entries 
 | `version` | Show version/author info. |
 | `quit` / `exit` / `q` | Save and exit. |
 
+### Keyboard shortcuts
+| Shortcut | Action |
+| --- | --- |
+| `Ctrl+C` | Cancel current input (does not exit the app). |
+| `Ctrl+D` | End input (prompts return empty/exit current prompt). |
+| `Ctrl+A` | Move cursor to start of line. |
+| `Ctrl+E` | Move cursor to end of line. |
+| `Ctrl+K` | Delete from cursor to end of line. |
+| `Ctrl+U` | Delete from start of line to cursor. |
+| `Ctrl+W` | Delete previous word. |
+| `Ctrl+L` | Clear screen and redraw prompt. |
+| `Tab` / double `Tab` | Trigger command completion and show suggestions. |
+
 ## Features
 - ncurses TUI with colorized header/body and centered dialogs.
 - Auto-lock after 5 minutes of inactivity.
