@@ -133,7 +133,7 @@ Enumerates every combination in the length range using charset presets:
 | `--wordlist PATH` | wordlist | Wordlist file, one candidate per line (required). |
 | `--min-len N` / `--max-len N` | exhaustive | Minimum / maximum key length (required). |
 | `--charset {digits,letters,alnum,special,digits-special,letters-special,alnum-special,common-special,custom}` | exhaustive | Charset preset for generator. |
-| `--special CHARS` | exhaustive | Override special characters for presets that include specials (`special`, `digits-special`, `letters-special`, `alnum-special`, `common-special`). |
+| `--special CHARS` | exhaustive | Override special characters for presets that include specials (`special`, `digits-special`, `letters-special`, `alnum-special`, `common-special`); typical specials: `!@#$%^&*()-_=+[]{};:'",.<>/?\`~`. |
 | `--chars CHARS` | exhaustive | Custom charset when using `--charset custom`. |
 | `--workers N` | exhaustive | Parallel processes (default: detected CPU cores if omitted; e.g., `--workers 4` forces 4 workers even if more cores are available). |
 | `--max-tries N` | both | Abort after N candidates. |
