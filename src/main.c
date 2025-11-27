@@ -4,6 +4,7 @@
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -178,6 +179,15 @@ static void append_log_entry(const char *entry) {
     fclose(fp);
 }
 
+static void log_action(const char *fmt, ...) {
+    char buf[256];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    append_log_entry(buf);
+}
+
 static void cancelled_and_clear(void) {
     printw("Cancelled.\n");
     refresh();
@@ -283,6 +293,7 @@ static void clear_history_log(void) {
     attron(COLOR_PAIR(BODY_PAIR));
     printw("History cleared.\n");
     attroff(COLOR_PAIR(BODY_PAIR));
+    log_action("history_cleared");
     refresh();
 }
 
@@ -1189,6 +1200,25 @@ static bool contains_case_insensitive(const char *haystack, const char *needle) 
     return false;
 }
 
+static bool entry_matches_terms(const Entry *e, char **terms, int term_count) {
+    if (!e || term_count == 0) return false;
+    for (int t = 0; t < term_count; ++t) {
+        const char *term = terms[t];
+        if (!term || term[0] == '\0') return false;
+        bool hit = false;
+        if (contains_case_insensitive(e->description, term) ||
+            contains_case_insensitive(e->user, term) ||
+            contains_case_insensitive(e->url, term) ||
+            contains_case_insensitive(e->tags, term) ||
+            contains_case_insensitive(e->comment, term) ||
+            contains_case_insensitive(e->status, term)) {
+            hit = true;
+        }
+        if (!hit) return false; /* all terms must match at least one field */
+    }
+    return true;
+}
+
 /* Display */
 static void print_separator(void) {
     int y, x;
@@ -1385,6 +1415,7 @@ static void add_entry(Database *db) {
     }
     now_string(e.updatedate, sizeof(e.updatedate));
     db->items[db->count++] = e;
+    log_action("add id=%d", e.id);
     printw("Added entry with id %d\n", e.id);
     refresh();
 }
@@ -1411,6 +1442,7 @@ static void change_entry(Database *db, int id) {
         return;
     }
     now_string(e->updatedate, sizeof(e->updatedate));
+    log_action("change id=%d", id);
     printw("Updated entry %d\n", id);
     refresh();
 }
@@ -1458,12 +1490,15 @@ static void change_passwords_for_user(Database *db, const char *user) {
         }
     }
 
+    size_t changed = 0;
     for (size_t i = 0; i < db->count; ++i) {
         if (strcasecmp_portable(db->items[i].user, user) == 0) {
             strncpy(db->items[i].password, new_pw, sizeof(db->items[i].password) - 1);
             now_string(db->items[i].updatedate, sizeof(db->items[i].updatedate));
+            changed++;
         }
     }
+    log_action("change_pw user=%s count=%zu", user, changed);
     if (generate) {
         printw("New password for user '%s': %s\n", user, new_pw);
     }
@@ -1508,6 +1543,7 @@ static bool change_master_password(Database *db, char *master) {
     strncpy(master, new_pw, MAX_PASSWORD);
     master[MAX_PASSWORD] = '\0';
     ui_show_message("Master password changed", "", 1200, true);
+    log_action("change_master_pw");
     touch_activity();
     return true;
 }
@@ -1539,6 +1575,19 @@ static void remove_entries(Database *db, int *ids, size_t id_count) {
         }
     }
     db->count = write_idx;
+    char buf[256];
+    buf[0] = '\0';
+    for (size_t i = 0; i < id_count; ++i) {
+        char tmp[16];
+        snprintf(tmp, sizeof(tmp), "%d", ids[i]);
+        if (strlen(buf) + strlen(tmp) + 2 < sizeof(buf)) {
+            if (i > 0) strncat(buf, ",", sizeof(buf) - strlen(buf) - 1);
+            strncat(buf, tmp, sizeof(buf) - strlen(buf) - 1);
+        } else {
+            break;
+        }
+    }
+    log_action("rm ids=%s count=%zu", buf, id_count);
     printw("Deletion complete.\n");
     refresh();
 }
@@ -1558,6 +1607,7 @@ static void print_help(void) {
     printw("  show url <url>                List entries matching url\n");
     printw("  show date <dd.mm.yyyy>        List entries created/updated on date\n");
     printw("  show status <value>           List entries by status\n");
+    printw("  show find <t1> [t2 ...]       Search terms across description/user/url/tags/comment/status\n");
     printw("  add pw                        Add new password (wizard)\n");
     printw("  change <id>                   Edit entry fields (wizard)\n");
     printw("  change pw <user>              Change all passwords for user\n");
@@ -1588,6 +1638,16 @@ static void show_filtered(const Database *db, const int *indexes, size_t count) 
 static void handle_show(Database *db, char **tokens, int token_count) {
     int indexes[MAX_ENTRIES];
     size_t idx_count = 0;
+
+    if (token_count >= 3 && (strcmp(tokens[1], "find") == 0 || strcmp(tokens[1], "search") == 0)) {
+        for (size_t i = 0; i < db->count; ++i) {
+            if (entry_matches_terms(&db->items[i], tokens + 2, token_count - 2)) {
+                indexes[idx_count++] = (int)i;
+            }
+        }
+        show_filtered(db, indexes, idx_count);
+        return;
+    }
 
     if (token_count == 1 || (token_count == 2 && strcmp(tokens[1], "all") == 0)) {
         for (size_t i = 0; i < db->count; ++i) indexes[idx_count++] = (int)i;
@@ -1724,6 +1784,7 @@ static bool unlock_vault(Database *db, char *master) {
             db_status = DB_STATUS_ONLINE;
             ui_draw_header(db_status);
             touch_activity();
+            log_action("unlock");
             return true;
         }
         ui_show_message("Unlock failed", "Invalid password or corrupted DB.", 1500, true);
@@ -1884,6 +1945,7 @@ int main(int argc, char **argv) {
             save_database(&db, db_path, master);
             db_status = DB_STATUS_OFFLINE;
             ui_draw_header(db_status);
+            log_action("lock");
             ui_clear_body();
             move(BODY_START_ROW, 0);
             printw("Vault locked. Enter master password to continue.\n");

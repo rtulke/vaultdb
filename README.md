@@ -84,6 +84,7 @@ Interactive vault for keeping test credentials: add, view, edit, delete entries 
 | `show url <url>` | List entries whose URL contains the value. |
 | `show date <dd.mm.yyyy>` | List entries created or updated on that date (prefix match). |
 | `show status <value>` | List entries with a given status. |
+| `show find <t1> [t2...]` | Search terms across description/user/url/tags/comment/status (all terms must match). |
 | `add pw` | Add a new entry via wizard. |
 | `change <id>` | Edit an entry via wizard. |
 | `change pw <user>` | Replace all passwords for a user (optionally generate). |
@@ -113,8 +114,10 @@ Interactive vault for keeping test credentials: add, view, edit, delete entries 
 - ncurses TUI with colorized header/body and centered dialogs.
 - Auto-lock after 5 minutes of inactivity.
 - Tab completion for commands, IDs, users, tags, and statuses.
+- Cross-field search via `show find` (description/user/url/tags/comment/status).
 - Obfuscated CSV database persisted to `~/.vault.db` (or system locations when root).
 - Command history logging to `~/.vault.log`.
+- Action logging with timestamps for add/change/delete/password ops and lock/unlock events.
 - Wizard-driven entry creation and edits, including optional password generation.
 
 ## Brute-force testing helpers
