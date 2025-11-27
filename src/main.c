@@ -1364,12 +1364,12 @@ static void print_separator(void) {
 }
 
 static void print_entry_table(const Database *db, const int *indexes, size_t index_count) {
-    size_t w_desc = 11, w_user = 6, w_pw = 8, w_url = 6, w_tags = 6, w_cd = 6, w_ud = 6, w_status = 6;
+    const char *hidden_pw = "********";
+    size_t w_desc = 11, w_user = 6, w_pw = strlen(hidden_pw), w_url = 6, w_tags = 6, w_cd = 6, w_ud = 6, w_status = 6;
     for (size_t i = 0; i < index_count; ++i) {
         const Entry *e = &db->items[indexes[i]];
         if (strlen(e->description) > w_desc) w_desc = strlen(e->description);
         if (strlen(e->user) > w_user) w_user = strlen(e->user);
-        if (strlen(e->password) > w_pw) w_pw = strlen(e->password);
         if (strlen(e->url) > w_url) w_url = strlen(e->url);
         if (strlen(e->tags) > w_tags) w_tags = strlen(e->tags);
         if (strlen(e->createdate) > w_cd) w_cd = strlen(e->createdate);
@@ -1403,7 +1403,7 @@ static void print_entry_table(const Database *db, const int *indexes, size_t ind
                e->id,
                (int)w_desc, (int)w_desc, e->description,
                (int)w_user, (int)w_user, e->user,
-               (int)w_pw, (int)w_pw, e->password,
+               (int)w_pw, (int)w_pw, hidden_pw,
                (int)w_url, (int)w_url, e->url,
                (int)w_tags, (int)w_tags, e->tags,
                (int)w_cd, (int)w_cd, e->createdate,
