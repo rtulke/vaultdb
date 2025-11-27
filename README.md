@@ -107,11 +107,20 @@ Interactive vault for keeping test credentials: add, view, edit, delete entries 
 ## Brute-force testing helpers
 Purpose-built for demonstrations to highlight the weak XOR obfuscation. Do not use for unauthorized access.
 
-- Wordlist mode: `python3 scripts/bruteforce.py wordlist --db ~/.vault.db --wordlist /path/to/wordlist.txt`
-  - Reads candidates from the wordlist until the CSV header decrypts.
-- Exhaustive mode: `python3 scripts/bruteforce.py exhaustive --db ~/.vault.db --min-len 4 --max-len 6 --charset alnum-special --special \"%$#-+.\" --workers 4`
-  - Enumerates every combination in the length range using charset presets:
-    - `digits`, `letters`, `alnum`, `special`, `digits-special`, `letters-special`, `alnum-special`
-  - `--special` overrides the special-character set for presets that include specials.
-  - `--workers` sets parallel processes (default: detected CPU cores). Note that search space grows exponentially with length; keep ranges small for tests.
-  - Common special-character sets in real-world passwords often include symbols like `!@#$%^&*()-_=+[]{};:'",.<>/?`~`. Use `--special` to reflect the set you want to test.
+### Wordlist mode
+
+Reads candidates from the wordlist until the CSV header decrypts.
+```sh
+python3 scripts/bruteforce.py wordlist --db ~/.vault.db --wordlist /path/to/wordlist.txt
+```
+
+### Exhaustive mode
+
+```sh
+python3 scripts/bruteforce.py exhaustive --db ~/.vault.db --min-len 4 --max-len 6 --charset alnum-special --special \"%$#-+.\" --workers 4`
+```
+Enumerates every combination in the length range using charset presets:
+ - `digits`, `letters`, `alnum`, `special`, `digits-special`, `letters-special`, `alnum-special`
+ - `--special` overrides the special-character set for presets that include specials.
+ - `--workers` sets parallel processes (default: detected CPU cores). Note that search space grows exponentially with length; keep ranges small for tests.
+ - Common special-character sets in real-world passwords often include symbols like `!@#$%^&*()-_=+[]{};:'",.<>/?`~`. Use `--special` to reflect the set you want to test.
