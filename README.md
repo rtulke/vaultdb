@@ -42,7 +42,7 @@ Interactive vault for keeping test credentials: add, view, edit, delete entries 
 
 ## Commands
 | Command | Description |
-| --- | --- |
+| :--- | :--- |
 | `help` | Show available commands. |
 | `show all` | List all entries in a table. |
 | `show tag <t1> [t2...]` | List entries matching any of the given tags. |
