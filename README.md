@@ -41,6 +41,30 @@ Uninstall (prompts before deleting the database):
 ```sh
 make uninstall
 ```
+## Installation System-wide
+Prerequisites: C11-compatible compiler and `ncurses` development headers and sudo.
+
+Clone from GitHub
+```sh
+# Prepare the dev directory, change it if it differs from yours ;-):
+mkdir ~/dev/
+cd ~/dev/
+git clone https://github.com/rtulke/vaultdb.git
+```
+Build locally:
+```sh
+make
+```
+
+Install the binary (defaults to `/usr/bin/vault`, override with `BINDIR=/custom/bin`):
+```sh
+sudo make install
+```
+
+Uninstall (prompts before deleting the database):
+```sh
+sudo make uninstall
+```
 
 ### Root vs. regular user
 - Running as root stores the database at `/var/lib/vaultdb/vault.db` and the log at `/var/log/vault.log`.
