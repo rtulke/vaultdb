@@ -142,6 +142,7 @@ static bool was_cancelled(void) {
 }
 
 static void redraw_input_line(int starty, int startx, const char *buffer, size_t prev_len, size_t cursor) {
+    attrset(COLOR_PAIR(BODY_PAIR));
     move(starty, startx);
     printw("%s", buffer);
     size_t cur_len = strlen(buffer);
