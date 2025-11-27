@@ -146,41 +146,41 @@ Enumerates every combination in the length range using charset presets:
 Example runs:
 
 ```sh
-# Minimal wordlist run with default DB
+# Minimal wordlist run with default DB — runtime depends on list size; a few million entries finish in seconds.
 python3 scripts/bruteforce.py wordlist --wordlist /tmp/rockyou.txt
 ```
 
 ```sh
-# Wordlist run with caps and quieter progress
+# Wordlist run with caps and quieter progress — 500k tries cap stays well under 10s at tens of millions checks/sec.
 python3 scripts/bruteforce.py wordlist --db ~/.vault.db --wordlist ./small.txt --max-tries 500000 --time-limit 10 --progress-every 20000
 ```
 
 ```sh
-# Stop after first two matches from wordlist
+# Stop after first two matches from wordlist — duration depends on where matches appear.
 python3 scripts/bruteforce.py wordlist --wordlist ./candidates.txt --max-matches 2
 ```
 
 ```sh
-# Exhaustive: digits only, 4–6 chars, 4 workers
+# Exhaustive: digits only, 4–6 chars, 4 workers — ~1.1 million combos; sub-second at ~50M+ checks/sec.
 python3 scripts/bruteforce.py exhaustive --min-len 4 --max-len 6 --charset digits --workers 4
 ```
 
 ```sh
-# Exhaustive: alnum+special with custom specials and time limit
+# Exhaustive: alnum+special with custom specials, 4–5 chars, 6 workers — ~85 billion combos; hours to a day+ if fully searched (use limits).
 python3 scripts/bruteforce.py exhaustive --min-len 4 --max-len 5 --charset alnum-special --special "%$#-+." --time-limit 15 --workers 6
 ```
 
 ```sh
-# Exhaustive: common-special preset (letters+digits+common symbols), stop after 100k tries
+# Exhaustive: common-special preset, length 4, stop after 100k — full space ~14 billion combos; capped run completes quickly, full run would take minutes to hours.
 python3 scripts/bruteforce.py exhaustive --min-len 4 --max-len 4 --charset common-special --max-tries 100000
 ```
 
 ```sh
-# Exhaustive: custom charset, very small space to demonstrate progress
+# Exhaustive: custom charset, very small space — 7^3=343 combos; instant.
 python3 scripts/bruteforce.py exhaustive --min-len 3 --max-len 3 --charset custom --chars "abc123!" --progress-every 5000
 ```
 
 ```sh
-# Exhaustive: run quietly (no progress logs)
+# Exhaustive: run quietly (no progress logs) — letters len 4 => 26^4≈456k combos; sub-second to a couple seconds.
 python3 scripts/bruteforce.py exhaustive --min-len 4 --max-len 4 --charset letters --quiet
 ```
