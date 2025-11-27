@@ -191,3 +191,16 @@ python3 scripts/bruteforce.py exhaustive --min-len 4 --max-len 4 --charset lette
 # Exhaustive: common-special, len 4–8, auto-workers (~10 on an M4) — search space ~5×10^15 combos; even at ~100M/s aggregate this would take ~1.6 years, so use smaller ranges or wordlists instead.
 python3 scripts/bruteforce.py exhaustive --min-len 4 --max-len 8 --charset common-special
 ```
+
+### Wordlist sources for testing
+Use only for legal testing/education; these lists can be very large.
+- https://github.com/danielmiessler/SecLists (Passwords/Leaked-Databases, Passwords/Common-Credentials)
+- https://github.com/berzerk0/Probable-Wordlists
+- https://github.com/jeanphorn/wordlist
+- https://github.com/kkrypt0nn/Wordlists
+- https://github.com/kaonashi-passwords/Kaonashi
+- https://crackstation.net/crackstation-human-only.txt.gz
+- https://download.weakpass.com/wordlists/ (multiple mega/gigabyte dumps)
+- https://haveibeenpwned.com/Passwords (Pwned Passwords download/API; SHA-1 hashes)
+- https://github.com/PrinceDhaliwal/WordList-Collection
+- https://github.com/insidetrust/statistically-likely-usernames (usernames, sometimes paired with small password sets)
