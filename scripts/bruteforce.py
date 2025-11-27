@@ -11,6 +11,7 @@ import multiprocessing as mp
 import string
 import sys
 from pathlib import Path
+from typing import Optional
 
 EXPECTED_HEADER = b"id,description,user,password,url,comment,tags,createdate,updatedate,status"
 
@@ -26,7 +27,7 @@ def header_matches(cipher_prefix: bytes, key: bytes) -> bool:
     return True
 
 
-def brute_force_wordlist(db_path: Path, wordlist_path: Path) -> str | None:
+def brute_force_wordlist(db_path: Path, wordlist_path: Path) -> Optional[str]:
     cipher = db_path.read_bytes()
     prefix = cipher[: len(EXPECTED_HEADER)]
     with wordlist_path.open("rb") as wl:
@@ -41,24 +42,23 @@ def brute_force_wordlist(db_path: Path, wordlist_path: Path) -> str | None:
     return None
 
 
-def build_charset(preset: str, custom_special: str | None) -> str:
+def build_charset(preset: str, custom_special: Optional[str]) -> str:
     specials_default = ";.,#-_%&$+'"
     specials = custom_special if custom_special is not None else specials_default
-    match preset:
-        case "digits":
-            return string.digits
-        case "letters":
-            return string.ascii_letters
-        case "alnum":
-            return string.ascii_letters + string.digits
-        case "special":
-            return specials
-        case "digits-special":
-            return string.digits + specials
-        case "letters-special":
-            return string.ascii_letters + specials
-        case "alnum-special":
-            return string.ascii_letters + string.digits + specials
+    if preset == "digits":
+        return string.digits
+    if preset == "letters":
+        return string.ascii_letters
+    if preset == "alnum":
+        return string.ascii_letters + string.digits
+    if preset == "special":
+        return specials
+    if preset == "digits-special":
+        return string.digits + specials
+    if preset == "letters-special":
+        return string.ascii_letters + specials
+    if preset == "alnum-special":
+        return string.ascii_letters + string.digits + specials
     raise ValueError(f"Unknown charset preset: {preset}")
 
 
@@ -92,8 +92,8 @@ def brute_force_exhaustive(
     max_len: int,
     charset: str,
     workers: int,
-    custom_special: str | None,
-) -> str | None:
+    custom_special: Optional[str],
+) -> Optional[str]:
     cipher = db_path.read_bytes()
     if len(cipher) < len(EXPECTED_HEADER):
         return None
@@ -115,7 +115,7 @@ def brute_force_exhaustive(
     for p in procs:
         p.start()
 
-    found: str | None = None
+    found: Optional[str] = None
     try:
         while any(p.is_alive() for p in procs):
             try:
