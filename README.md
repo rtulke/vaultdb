@@ -103,3 +103,14 @@ Interactive vault for keeping test credentials: add, view, edit, delete entries 
 - Obfuscated CSV database persisted to `~/.vault.db` (or system locations when root).
 - Command history logging to `~/.vault.log`.
 - Wizard-driven entry creation and edits, including optional password generation.
+
+## Brute-force testing helpers
+For demonstrations only—do not use these for unauthorized access.
+
+- Wordlist-based: `python3 scripts/bruteforce.py --db ~/.vault.db --wordlist /path/to/wordlist.txt`
+  - Tries each line in the wordlist as the master password until the CSV header decrypts.
+- Exhaustive generator: `python3 scripts/bruteforce_exhaustive.py --db ~/.vault.db --min-len 4 --max-len 6 --charset alnum-special --special \"%$#-+.\" --workers 4`
+  - Generates all combinations in the length range using charset presets:
+    - `digits`, `letters`, `alnum`, `special`, `digits-special`, `letters-special`, `alnum-special`
+  - `--special` overrides the special-character set for presets that include specials.
+  - `--workers` controls parallel processes (default: CPU cores). Longer ranges explode combinatorially; keep lengths small for tests.
