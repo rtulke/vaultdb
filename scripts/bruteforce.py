@@ -44,7 +44,7 @@ def brute_force_wordlist(db_path: Path, wordlist_path: Path) -> Optional[str]:
 
 
 def build_charset(preset: str, custom_special: Optional[str], custom_chars: Optional[str] = None) -> str:
-    specials_default = ";.,#-_%&$+'"
+    specials_default = "!@#$%^&*()-_=+[]{};:'\",.<>/?`~"
     specials = custom_special if custom_special is not None else specials_default
     if preset == "digits":
         return string.digits
