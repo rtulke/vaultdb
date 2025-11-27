@@ -15,4 +15,5 @@ vault
 
 # project-specific
 vault.db
+.vault.db
 AGENTS.md

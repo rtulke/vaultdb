@@ -1,6 +1,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <ncurses.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -66,10 +67,12 @@ static const char *db_status = "locked";
 static char db_path[MAX_PATH_LEN] = "vault.db";
 static char log_path[MAX_PATH_LEN] = "";
 static time_t last_activity = 0;
+static volatile sig_atomic_t cancel_requested = 0;
 
 /* Forward declarations for UI helpers used by logging */
 static void ui_clear_body(void);
 static void print_error_line(const char *msg);
+static void ui_draw_divider(void);
 
 static void generate_password(char *out, size_t max_len, int length, int mode);
 
@@ -125,6 +128,19 @@ static void touch_activity(void) {
     last_activity = time(NULL);
 }
 
+static void handle_sigint(int sig) {
+    (void)sig;
+    cancel_requested = 1;
+}
+
+static bool was_cancelled(void) {
+    if (cancel_requested) {
+        cancel_requested = 0;
+        return true;
+    }
+    return false;
+}
+
 static void redraw_input_line(int starty, int startx, const char *buffer, size_t prev_len, size_t cursor) {
     move(starty, startx);
     printw("%s", buffer);
@@ -159,6 +175,14 @@ static void append_log_entry(const char *entry) {
     log_timestamp(ts, sizeof(ts));
     fprintf(fp, "%s %s %s\n", ts, PROGRAM_NAME, entry);
     fclose(fp);
+}
+
+static void cancelled_and_clear(void) {
+    printw("Cancelled.\n");
+    refresh();
+    napms(1000);
+    ui_clear_body();
+    ui_draw_divider();
 }
 
 static bool string_in_list(const char *s, char list[][MAX_LINE], size_t count) {
@@ -480,6 +504,7 @@ static void ui_init(void) {
     noecho();
     keypad(stdscr, TRUE);
     curs_set(1);
+    signal(SIGINT, handle_sigint); /* Ctrl+C cancels current input, not exit */
     init_colors();
 }
 
@@ -636,6 +661,11 @@ static bool read_line(char *buffer, size_t size) {
             buffer[0] = '\0';
             return false;
         }
+        if (ch == 3) { /* Ctrl+C cancel */
+            buffer[0] = '\0';
+            cancel_requested = 1;
+            return false;
+        }
         if (ch == '\n' || ch == '\r') {
             buffer[idx] = '\0';
             return true;
@@ -664,7 +694,10 @@ static bool read_line(char *buffer, size_t size) {
 }
 
 static bool read_command_line(const Database *db, char *buffer, size_t size) {
-    size_t idx = 0;
+    size_t len = 0;
+    size_t cursor = 0;
+    bool tab_pending = false;
+    buffer[0] = '\0';
     attrset(COLOR_PAIR(BODY_PAIR));
     noecho();
     keypad(stdscr, TRUE);
@@ -685,34 +718,152 @@ static bool read_command_line(const Database *db, char *buffer, size_t size) {
             continue;
         }
         if (ch == '\t') {
-            handle_completion(db, buffer, &idx, size, starty, startx);
+            if (tab_pending) {
+                cursor = len;
+                handle_completion(db, buffer, &cursor, size, starty, startx);
+                len = strlen(buffer);
+                cursor = len;
+                tab_pending = false;
+            } else {
+                tab_pending = true;
+            }
             continue;
         }
+        tab_pending = false;
+        if (ch == 3 || cancel_requested) { /* Ctrl+C cancel input */
+            cancel_requested = 0;
+            size_t prev_len = len;
+            len = 0;
+            cursor = 0;
+            buffer[0] = '\0';
+            move(starty, 0);
+            clrtoeol();
+            attron(COLOR_PAIR(FRAME_PAIR));
+            printw("vault");
+            attroff(COLOR_PAIR(FRAME_PAIR));
+            attron(COLOR_PAIR(TITLE_PAIR));
+            printw(">");
+            attroff(COLOR_PAIR(TITLE_PAIR));
+            printw(" ");
+            getyx(stdscr, starty, startx);
+            redraw_input_line(starty, startx, buffer, prev_len, cursor);
+            continue;
+        }
+        if (ch == 4) { /* Ctrl+D exits input */
+            buffer[0] = '\0';
+            timeout(-1);
+            return false;
+        }
         if (ch == '\n' || ch == '\r') {
-            buffer[idx] = '\0';
+            buffer[len] = '\0';
             timeout(-1);
             return true;
         }
+        if (ch == 1) { /* Ctrl+A */
+            cursor = 0;
+            move(starty, startx + (int)cursor);
+            refresh();
+            continue;
+        }
+        if (ch == 5) { /* Ctrl+E */
+            cursor = len;
+            move(starty, startx + (int)cursor);
+            refresh();
+            continue;
+        }
+        if (ch == KEY_LEFT) {
+            if (cursor > 0) {
+                touch_activity();
+                cursor--;
+                move(starty, startx + (int)cursor);
+                refresh();
+            }
+            continue;
+        }
+        if (ch == KEY_RIGHT) {
+            if (cursor < len) {
+                touch_activity();
+                cursor++;
+                move(starty, startx + (int)cursor);
+                refresh();
+            }
+            continue;
+        }
+        if (ch == 11) { /* Ctrl+K */
+            size_t prev_len = len;
+            len = cursor;
+            buffer[len] = '\0';
+            redraw_input_line(starty, startx, buffer, prev_len, cursor);
+            continue;
+        }
+        if (ch == 21) { /* Ctrl+U */
+            if (cursor > 0) {
+                size_t prev_len = len;
+                memmove(buffer, buffer + cursor, len - cursor + 1);
+                len -= cursor;
+                cursor = 0;
+                buffer[len] = '\0';
+                redraw_input_line(starty, startx, buffer, prev_len, cursor);
+            }
+            continue;
+        }
+        if (ch == 23) { /* Ctrl+W */
+            if (cursor > 0) {
+                size_t prev_len = len;
+                size_t i = cursor;
+                while (i > 0 && isspace((unsigned char)buffer[i - 1])) i--;
+                while (i > 0 && !isspace((unsigned char)buffer[i - 1])) i--;
+                memmove(buffer + i, buffer + cursor, len - cursor + 1);
+                len -= (cursor - i);
+                cursor = i;
+                buffer[len] = '\0';
+                redraw_input_line(starty, startx, buffer, prev_len, cursor);
+            }
+            continue;
+        }
+        if (ch == 12) { /* Ctrl+L clear screen */
+            touch_activity();
+            ui_clear_body();
+            ui_draw_divider();
+            size_t prev_len = len;
+            len = 0;
+            cursor = 0;
+            move(starty, 0);
+            clrtoeol();
+            attron(COLOR_PAIR(FRAME_PAIR));
+            printw("vault");
+            attroff(COLOR_PAIR(FRAME_PAIR));
+            attron(COLOR_PAIR(TITLE_PAIR));
+            printw(">");
+            attroff(COLOR_PAIR(TITLE_PAIR));
+            printw(" ");
+            getyx(stdscr, starty, startx);
+            redraw_input_line(starty, startx, buffer, prev_len, cursor);
+            continue;
+        }
         if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) {
-            if (idx > 0) {
-                idx--;
-                int y, x;
-                getyx(stdscr, y, x);
-                if (x > 0) {
-                    move(y, x - 1);
-                    addch(' ');
-                    move(y, x - 1);
-                    refresh();
-                }
+            if (cursor > 0) {
+                size_t prev_len = len;
+                memmove(buffer + cursor - 1, buffer + cursor, len - cursor + 1);
+                len--;
+                cursor--;
+                buffer[len] = '\0';
+                redraw_input_line(starty, startx, buffer, prev_len, cursor);
             }
             continue;
         }
         if (!isprint(ch)) continue;
-        if (idx + 1 >= size) continue;
+        if (len + 1 >= size) continue;
         touch_activity();
-        buffer[idx++] = (char)ch;
-        addch((ch == '\t') ? ' ' : ch);
-        refresh();
+        size_t prev_len = len;
+        if (cursor < len) {
+            memmove(buffer + cursor + 1, buffer + cursor, len - cursor + 1);
+        }
+        buffer[cursor] = (char)ch;
+        len++;
+        cursor++;
+        buffer[len] = '\0';
+        redraw_input_line(starty, startx, buffer, prev_len, cursor);
     }
 }
 
@@ -732,6 +883,11 @@ static bool read_password_obfuscated(char *buffer, size_t size) {
             return true;
         }
         if (ch == 4) { /* Ctrl+D */
+            buffer[0] = '\0';
+            return false;
+        }
+        if (ch == 3 || cancel_requested) { /* Ctrl+C */
+            cancel_requested = 0;
             buffer[0] = '\0';
             return false;
         }
@@ -1087,15 +1243,17 @@ static void print_entry_detail(const Entry *e) {
 }
 
 /* Wizards */
-static void wizard_fill_entry(Entry *e, const char *user_default) {
+static bool wizard_fill_entry(Entry *e, const char *user_default) {
     char input[MAX_LINE];
 
     printw("Description (%s): ", e->description);
-    read_line(input, sizeof(input));
+    if (!read_line(input, sizeof(input)) || was_cancelled()) return false;
+    printw("\n");
     if (strlen(input) > 0) strncpy(e->description, input, sizeof(e->description) - 1);
 
     printw("User (%s): ", strlen(user_default) > 0 ? user_default : e->user);
-    read_line(input, sizeof(input));
+    if (!read_line(input, sizeof(input)) || was_cancelled()) return false;
+    printw("\n");
     if (strlen(input) > 0) {
         strncpy(e->user, input, sizeof(e->user) - 1);
     } else if (strlen(user_default) > 0) {
@@ -1103,39 +1261,48 @@ static void wizard_fill_entry(Entry *e, const char *user_default) {
     }
 
     printw("Generate password? (y/n): ");
-    read_line(input, sizeof(input));
+    if (!read_line(input, sizeof(input)) || was_cancelled()) return false;
+    printw("\n");
     if (tolower((unsigned char)input[0]) == 'y') {
         printw("Length: ");
-        read_line(input, sizeof(input));
+        if (!read_line(input, sizeof(input)) || was_cancelled()) return false;
+        printw("\n");
         int len = atoi(input);
         if (len <= 0 || len > MAX_PASSWORD) len = 16;
         printw("Mode (1=numbers, 2=alnum, 3=alnum+special): ");
-        read_line(input, sizeof(input));
+        if (!read_line(input, sizeof(input)) || was_cancelled()) return false;
+        printw("\n");
         int mode = atoi(input);
         if (mode < 1 || mode > 3) mode = 2;
         generate_password(e->password, sizeof(e->password), len, mode);
         printw("Generated password: %s\n", e->password);
     } else {
         printw("Password (%s): ", e->password);
-        read_line(input, sizeof(input));
+        if (!read_line(input, sizeof(input)) || was_cancelled()) return false;
+        printw("\n");
         if (strlen(input) > 0) strncpy(e->password, input, sizeof(e->password) - 1);
     }
 
     printw("URL (%s): ", e->url);
-    read_line(input, sizeof(input));
+    if (!read_line(input, sizeof(input)) || was_cancelled()) return false;
+    printw("\n");
     if (strlen(input) > 0) strncpy(e->url, input, sizeof(e->url) - 1);
 
     printw("Tags comma separated (%s): ", e->tags);
-    read_line(input, sizeof(input));
+    if (!read_line(input, sizeof(input)) || was_cancelled()) return false;
+    printw("\n");
     if (strlen(input) > 0) strncpy(e->tags, input, sizeof(e->tags) - 1);
 
     printw("Comment (%s): ", e->comment);
-    read_line(input, sizeof(input));
+    if (!read_line(input, sizeof(input)) || was_cancelled()) return false;
+    printw("\n");
     if (strlen(input) > 0) strncpy(e->comment, input, sizeof(e->comment) - 1);
 
     printw("Status (%s): ", e->status);
-    read_line(input, sizeof(input));
+    if (!read_line(input, sizeof(input)) || was_cancelled()) return false;
+    printw("\n");
     if (strlen(input) > 0) strncpy(e->status, input, sizeof(e->status) - 1);
+    return true;
 }
 
 /* Generators */
@@ -1173,7 +1340,7 @@ static void add_entry(Database *db) {
         return;
     }
     ui_clear_body();
-    move(3, 0);
+    move(BODY_START_ROW, 0);
     Entry e = {0};
     e.id = db->next_id++;
     strncpy(e.description, "New entry", sizeof(e.description) - 1);
@@ -1186,7 +1353,10 @@ static void add_entry(Database *db) {
     now_string(e.createdate, sizeof(e.createdate));
     strncpy(e.updatedate, e.createdate, sizeof(e.updatedate) - 1);
 
-    wizard_fill_entry(&e, "");
+    if (!wizard_fill_entry(&e, "")) {
+        cancelled_and_clear();
+        return;
+    }
     now_string(e.updatedate, sizeof(e.updatedate));
     db->items[db->count++] = e;
     printw("Added entry with id %d\n", e.id);
@@ -1210,7 +1380,10 @@ static void change_entry(Database *db, int id) {
     }
     ui_clear_body();
     move(BODY_START_ROW, 0);
-    wizard_fill_entry(e, e->user);
+    if (!wizard_fill_entry(e, e->user)) {
+        cancelled_and_clear();
+        return;
+    }
     now_string(e->updatedate, sizeof(e->updatedate));
     printw("Updated entry %d\n", id);
     refresh();
@@ -1221,31 +1394,42 @@ static void change_passwords_for_user(Database *db, const char *user) {
     ui_clear_body();
     move(BODY_START_ROW, 0);
     printw("Are you sure you want to change all passwords for user '%s'? (y/n): ", user);
-    read_line(input, sizeof(input));
-    if (tolower((unsigned char)input[0]) != 'y') {
-        printw("Cancelled.\n");
-        refresh();
+    if (!read_line(input, sizeof(input)) || was_cancelled() || tolower((unsigned char)input[0]) != 'y') {
+        cancelled_and_clear();
         return;
     }
     printw("Generate new password for all? (y/n): ");
-    read_line(input, sizeof(input));
+    if (!read_line(input, sizeof(input)) || was_cancelled()) {
+        cancelled_and_clear();
+        return;
+    }
     bool generate = tolower((unsigned char)input[0]) == 'y';
     int len = 16;
     int mode = 2;
     char new_pw[MAX_PASSWORD + 1] = {0};
     if (generate) {
         printw("Length: ");
-        read_line(input, sizeof(input));
+        if (!read_line(input, sizeof(input)) || was_cancelled()) {
+            cancelled_and_clear();
+            refresh();
+            return;
+        }
         len = atoi(input);
         if (len <= 0 || len > MAX_PASSWORD) len = 16;
         printw("Mode (1=numbers, 2=alnum, 3=alnum+special): ");
-        read_line(input, sizeof(input));
+        if (!read_line(input, sizeof(input)) || was_cancelled()) {
+            cancelled_and_clear();
+            return;
+        }
         mode = atoi(input);
         if (mode < 1 || mode > 3) mode = 2;
         generate_password(new_pw, sizeof(new_pw), len, mode);
     } else {
         printw("Enter new password: ");
-        read_line(new_pw, sizeof(new_pw));
+        if (!read_line(new_pw, sizeof(new_pw)) || was_cancelled()) {
+            cancelled_and_clear();
+            return;
+        }
     }
 
     for (size_t i = 0; i < db->count; ++i) {
@@ -1270,10 +1454,8 @@ static void remove_entries(Database *db, int *ids, size_t id_count) {
         printw("%d%s", ids[i], (i + 1 < id_count) ? " " : "");
     }
     printw("? (y/n): ");
-    read_line(input, sizeof(input));
-    if (tolower((unsigned char)input[0]) != 'y') {
-        printw("Cancelled.\n");
-        refresh();
+    if (!read_line(input, sizeof(input)) || was_cancelled() || tolower((unsigned char)input[0]) != 'y') {
+        cancelled_and_clear();
         return;
     }
     size_t write_idx = 0;
