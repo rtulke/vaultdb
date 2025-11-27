@@ -113,4 +113,4 @@ For demonstrations only—do not use these for unauthorized access.
   - Generates all combinations in the length range using charset presets:
     - `digits`, `letters`, `alnum`, `special`, `digits-special`, `letters-special`, `alnum-special`
   - `--special` overrides the special-character set for presets that include specials.
-  - `--workers` controls parallel processes (default: CPU cores). Longer ranges explode combinatorially; keep lengths small for tests.
+  - `--workers` controls parallel processes (default: detected CPU cores). Longer ranges explode combinatorially; keep lengths small for tests.

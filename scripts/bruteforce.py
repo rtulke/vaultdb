@@ -161,7 +161,7 @@ def main() -> int:
         "--special",
         help="Override special characters for presets including specials (e.g. \"~!@#%$\")",
     )
-    p_exhaust.add_argument("--workers", type=int, default=mp.cpu_count(), help="Number of parallel workers")
+    p_exhaust.add_argument("--workers", type=int, help="Number of parallel workers (default: detected CPU cores)")
 
     args = parser.parse_args()
 
@@ -181,7 +181,8 @@ def main() -> int:
         if args.min_len <= 0 or args.max_len < args.min_len:
             print("Invalid length range.", file=sys.stderr)
             return 1
-        workers = max(1, args.workers)
+        workers = args.workers if args.workers is not None else mp.cpu_count() or 1
+        workers = max(1, workers)
         print(
             f"Brute-forcing {db_path} exhaustively (len {args.min_len}-{args.max_len}, charset {args.charset}, "
             f"workers {workers}; testing only)..."
