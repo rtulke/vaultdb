@@ -73,7 +73,7 @@ static volatile sig_atomic_t cancel_requested = 0;
 static char history[HISTORY_MAX][MAX_LINE];
 static size_t history_count = 0;
 static const char *clipboard_cmd = NULL;
-static int clipboard_type = 0; /* 1=pbcopy,2=xclip,3=xsel,4=wl-copy */
+static int clipboard_type = 0; /* 1=pbcopy,2=xclip,3=xsel,4=wl-copy,5=clip */
 static const int CLIPBOARD_CLEAR_SECONDS = 10;
 
 /* Forward declarations for UI helpers used by logging */
@@ -239,6 +239,17 @@ static bool clipboard_init(void) {
         clipboard_type = 4;
         return true;
     }
+#ifdef _WIN32
+    clipboard_cmd = "clip";
+    clipboard_type = 5;
+    return true;
+#else
+    if (command_exists("clip")) {
+        clipboard_cmd = "clip";
+        clipboard_type = 5;
+        return true;
+    }
+#endif
     return false;
 }
 
@@ -257,6 +268,9 @@ static bool clipboard_write_text(const char *text) {
             break;
         case 4: /* wl-copy */
             fp = popen("wl-copy", "w");
+            break;
+        case 5: /* clip (Windows) */
+            fp = popen("clip", "w");
             break;
         default:
             return false;

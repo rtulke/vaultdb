@@ -117,7 +117,7 @@ Interactive vault for keeping test credentials: add, view, edit, delete entries 
 - Auto-lock after 5 minutes of inactivity.
 - Tab completion for commands, IDs, users, tags, and statuses.
 - Cross-field search via `show find` (description/user/url/tags/comment/status).
-- Copy password to clipboard for 10s via `copy <id>` (pbcopy/xclip/xsel/wl-copy).
+- Copy password to clipboard for 10s via `copy <id>` (pbcopy/xclip/xsel/wl-copy/clip).
 - Obfuscated CSV database persisted to `~/.vault.db` (or system locations when root).
 - Command history logging to `~/.vault.log`.
 - Action logging with timestamps for add/change/delete/password ops and lock/unlock events.
