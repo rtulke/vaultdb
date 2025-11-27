@@ -98,7 +98,7 @@ Interactive vault for keeping test credentials: add, view, edit, delete entries 
 
 ### Keyboard shortcuts
 | Shortcut | Action |
-| --- | --- |
+| :--- | :--- |
 | `Ctrl+C` | Cancel current input (does not exit the app). |
 | `Ctrl+D` | End input (prompts return empty/exit current prompt). |
 | `Ctrl+A` | Move cursor to start of line. |
@@ -141,7 +141,7 @@ Enumerates every combination in the length range using charset presets:
 ### Parameter reference (bruteforce.py)
 
 | Parameter | Subcommand | Description |
-| --- | --- | --- |
+| :--- | :--- | :--- |
 | `--db PATH` | both | Path to database (default: `~/.vault.db`). |
 | `--wordlist PATH` | wordlist | Wordlist file, one candidate per line (required). |
 | `--min-len N` / `--max-len N` | exhaustive | Minimum / maximum key length (required). |
