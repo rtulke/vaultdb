@@ -949,6 +949,7 @@ static bool prompt_command(const Database *db, const char *label, char *buffer, 
     printw(">");
     attroff(COLOR_PAIR(TITLE_PAIR));
     printw(" ");
+    curs_set(1);
     refresh();
     return read_command_line(db, buffer, size);
 }
