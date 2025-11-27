@@ -90,6 +90,7 @@ Interactive vault for keeping test credentials: add, view, edit, delete entries 
 | `change pw <user>` | Replace all passwords for a user (optionally generate). |
 | `change master-pw` | Set a new master password. |
 | `rm pw <id1> [id2...]` | Delete entries by ID after confirmation. |
+| `copy <id>` | Copy password to clipboard (auto-clears after 10s). |
 | `lock` | Save, lock the vault, and require master password to unlock. |
 | `history` | Show command history log. |
 | `history clear` | Clear command history log. |
@@ -116,6 +117,7 @@ Interactive vault for keeping test credentials: add, view, edit, delete entries 
 - Auto-lock after 5 minutes of inactivity.
 - Tab completion for commands, IDs, users, tags, and statuses.
 - Cross-field search via `show find` (description/user/url/tags/comment/status).
+- Copy password to clipboard for 10s via `copy <id>` (pbcopy/xclip/xsel/wl-copy).
 - Obfuscated CSV database persisted to `~/.vault.db` (or system locations when root).
 - Command history logging to `~/.vault.log`.
 - Action logging with timestamps for add/change/delete/password ops and lock/unlock events.

@@ -72,11 +72,15 @@ static time_t last_activity = 0;
 static volatile sig_atomic_t cancel_requested = 0;
 static char history[HISTORY_MAX][MAX_LINE];
 static size_t history_count = 0;
+static const char *clipboard_cmd = NULL;
+static int clipboard_type = 0; /* 1=pbcopy,2=xclip,3=xsel,4=wl-copy */
+static const int CLIPBOARD_CLEAR_SECONDS = 10;
 
 /* Forward declarations for UI helpers used by logging */
 static void ui_clear_body(void);
 static void print_error_line(const char *msg);
 static void ui_draw_divider(void);
+static Entry *find_entry_by_id(Database *db, int id);
 
 static void generate_password(char *out, size_t max_len, int length, int mode);
 
@@ -203,6 +207,72 @@ static void add_history_entry(const char *cmd) {
         strncpy(history[HISTORY_MAX - 1], cmd, MAX_LINE - 1);
         history[HISTORY_MAX - 1][MAX_LINE - 1] = '\0';
     }
+}
+
+static bool command_exists(const char *cmd) {
+    if (!cmd || !*cmd) return false;
+    char check_cmd[256];
+    snprintf(check_cmd, sizeof(check_cmd), "command -v %s >/dev/null 2>&1", cmd);
+    int ret = system(check_cmd);
+    return ret == 0;
+}
+
+static bool clipboard_init(void) {
+    if (clipboard_cmd) return true;
+    if (command_exists("pbcopy")) {
+        clipboard_cmd = "pbcopy";
+        clipboard_type = 1;
+        return true;
+    }
+    if (command_exists("xclip")) {
+        clipboard_cmd = "xclip";
+        clipboard_type = 2;
+        return true;
+    }
+    if (command_exists("xsel")) {
+        clipboard_cmd = "xsel";
+        clipboard_type = 3;
+        return true;
+    }
+    if (command_exists("wl-copy")) {
+        clipboard_cmd = "wl-copy";
+        clipboard_type = 4;
+        return true;
+    }
+    return false;
+}
+
+static bool clipboard_write_text(const char *text) {
+    if (!clipboard_cmd || !text) return false;
+    FILE *fp = NULL;
+    switch (clipboard_type) {
+        case 1: /* pbcopy */
+            fp = popen("pbcopy", "w");
+            break;
+        case 2: /* xclip */
+            fp = popen("xclip -selection clipboard", "w");
+            break;
+        case 3: /* xsel */
+            fp = popen("xsel --clipboard --input", "w");
+            break;
+        case 4: /* wl-copy */
+            fp = popen("wl-copy", "w");
+            break;
+        default:
+            return false;
+    }
+    if (!fp) return false;
+    fputs(text, fp);
+    int rc = pclose(fp);
+    return rc == 0;
+}
+
+static void clipboard_clear_later(void) {
+    pid_t pid = fork();
+    if (pid != 0) return;
+    sleep(CLIPBOARD_CLEAR_SECONDS);
+    clipboard_write_text("");
+    _exit(0);
 }
 
 static void cancelled_and_clear(void) {
@@ -1330,6 +1400,17 @@ static void print_entry_table(const Database *db, const int *indexes, size_t ind
     print_separator();
 }
 
+static bool copy_password_to_clipboard(const Database *db, int id) {
+    if (!db) return false;
+    const Entry *e = find_entry_by_id((Database *)db, id);
+    if (!e) return false;
+    if (!clipboard_init()) return false;
+    if (!clipboard_write_text(e->password)) return false;
+    clipboard_clear_later();
+    log_action("copy id=%d", id);
+    return true;
+}
+
 static void print_entry_detail(const Entry *e) {
     print_separator();
     attron(COLOR_PAIR(BODY_PAIR));
@@ -1662,6 +1743,7 @@ static void print_help(void) {
     printw("  change pw <user>              Change all passwords for user\n");
     printw("  change master-pw              Set a new master password (confirm)\n");
     printw("  rm pw <id1> [id2 ...]         Remove entries by id (confirm)\n");
+    printw("  copy <id>                     Copy password to clipboard (auto-clears)\n");
     printw("  version                       Show version and author info\n");
     printw("  lock                          Lock vault and require master password\n");
     printw("  history                       Show command history log\n");
@@ -2010,6 +2092,16 @@ int main(int argc, char **argv) {
             } else {
                 show_history_log();
             }
+        } else if (strcmp(tokens[0], "copy") == 0 && token_count == 2) {
+            int id = atoi(tokens[1]);
+            ui_clear_body();
+            move(BODY_START_ROW, 0);
+            if (!copy_password_to_clipboard(&db, id)) {
+                print_error_line("Copy failed (entry missing or clipboard unavailable).");
+            } else {
+                printw("Password copied to clipboard for %d seconds.\n", CLIPBOARD_CLEAR_SECONDS);
+            }
+            refresh();
         } else if (strcmp(tokens[0], "quit") == 0 || strcmp(tokens[0], "exit") == 0 || strcmp(tokens[0], "q") == 0) {
             save_database(&db, db_path, master);
             break;
