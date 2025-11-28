@@ -33,6 +33,7 @@
 #define BODY_COLOR_ID 10
 #define ERROR_COLOR_ID 11
 #define STATUS_OFF_COLOR_ID 12
+#define STATUS_ON_COLOR_ID 13
 #define BODY_START_ROW 3
 #define MAX_PATH_LEN 512
 #define HISTORY_MAX 256
@@ -572,6 +573,7 @@ static void init_colors(void) {
         init_color(BODY_COLOR_ID, 910, 863, 769);  /* rgb(232,220,196) */
         init_color(ERROR_COLOR_ID, 200, 804, 874); /* rgb(51,205,223) */
         init_color(STATUS_OFF_COLOR_ID, 251, 251, 251); /* rgb(64,64,64) */
+        init_color(STATUS_ON_COLOR_ID, 345, 643, 0); /* rgb(88,164,0) */
         frame_fg = FRAME_COLOR_ID;
         title_fg = TITLE_COLOR_ID;
         body_fg = BODY_COLOR_ID;
@@ -583,6 +585,7 @@ static void init_colors(void) {
     init_pair(BODY_PAIR, body_fg, -1);
     init_pair(ERROR_PAIR, error_fg, -1);
     init_pair(STATUS_OFF_PAIR, status_off_fg, -1);
+    init_pair(STATUS_OFF_PAIR + 1, can_change_color() ? STATUS_ON_COLOR_ID : COLOR_GREEN, -1);
 }
 
 static void ui_draw_header(const char *status) {
@@ -592,9 +595,9 @@ static void ui_draw_header(const char *status) {
     printw("db status: ");
     attroff(COLOR_PAIR(BODY_PAIR));
     if (status && strcmp(status, DB_STATUS_ONLINE) == 0) {
-        attron(COLOR_PAIR(ERROR_PAIR));
+        attron(COLOR_PAIR(STATUS_OFF_PAIR + 1));
         printw("%s", status);
-        attroff(COLOR_PAIR(ERROR_PAIR));
+        attroff(COLOR_PAIR(STATUS_OFF_PAIR + 1));
     } else {
         attron(COLOR_PAIR(STATUS_OFF_PAIR));
         printw("%s", status ? status : DB_STATUS_OFFLINE);
