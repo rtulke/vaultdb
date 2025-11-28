@@ -1431,7 +1431,6 @@ static void print_entry_table(const Database *db, const int *indexes, size_t ind
         addch('\n');
         attroff(COLOR_PAIR(BODY_PAIR));
     }
-    print_separator();
 }
 
 static bool copy_password_to_clipboard(const Database *db, int id) {
