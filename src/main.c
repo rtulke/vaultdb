@@ -1396,7 +1396,10 @@ static void print_entry_table(const Database *db, const int *indexes, size_t ind
     int w_tags = base + (rem > 3 ? 1 : 0);
     int w_status = base + (rem > 4 ? 1 : 0);
 
+    int row = getcury(stdscr);
+
     attron(COLOR_PAIR(BODY_PAIR));
+    move(row, 0);
     printw("%-4s ", "ID");
     print_cell("Description", w_desc);
     addch(' ');
@@ -1408,16 +1411,18 @@ static void print_entry_table(const Database *db, const int *indexes, size_t ind
     addch(' ');
     print_cell("Status", w_status);
     attroff(COLOR_PAIR(BODY_PAIR));
-    addch('\n');
+    row++;
 
     attron(COLOR_PAIR(FRAME_PAIR));
-    for (int i = 0; i < COLS; ++i) addch('-');
+    move(row, 0);
+    hline(ACS_HLINE, COLS);
     attroff(COLOR_PAIR(FRAME_PAIR));
-    addch('\n');
+    row++;
 
     for (size_t i = 0; i < index_count; ++i) {
         const Entry *e = &db->items[indexes[i]];
         attron(COLOR_PAIR(BODY_PAIR));
+        move(row, 0);
         printw("%-4d ", e->id);
         print_cell(e->description, w_desc);
         addch(' ');
@@ -1428,8 +1433,8 @@ static void print_entry_table(const Database *db, const int *indexes, size_t ind
         print_cell(e->tags, w_tags);
         addch(' ');
         print_cell(e->status, w_status);
-        addch('\n');
         attroff(COLOR_PAIR(BODY_PAIR));
+        row++;
     }
 }
 
