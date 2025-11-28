@@ -1407,8 +1407,8 @@ static void print_entry_table(const Database *db, const int *indexes, size_t ind
     print_cell("Tags", w_tags);
     addch(' ');
     print_cell("Status", w_status);
-    addch('\n');
     attroff(COLOR_PAIR(BODY_PAIR));
+    addch('\n');
 
     attron(COLOR_PAIR(FRAME_PAIR));
     for (int i = 0; i < COLS; ++i) addch('-');
