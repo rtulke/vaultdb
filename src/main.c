@@ -71,6 +71,7 @@ static char db_path[MAX_PATH_LEN] = "vault.db";
 static char log_path[MAX_PATH_LEN] = "";
 static time_t last_activity = 0;
 static volatile sig_atomic_t cancel_requested = 0;
+static volatile sig_atomic_t resize_requested = 0;
 static char history[HISTORY_MAX][MAX_LINE];
 static size_t history_count = 0;
 static const char *clipboard_cmd = NULL;
@@ -140,6 +141,11 @@ static void touch_activity(void) {
 static void handle_sigint(int sig) {
     (void)sig;
     cancel_requested = 1;
+}
+
+static void handle_sigwinch(int sig) {
+    (void)sig;
+    resize_requested = 1;
 }
 
 static bool was_cancelled(void) {
@@ -622,6 +628,7 @@ static void ui_init(void) {
     keypad(stdscr, TRUE);
     curs_set(1);
     signal(SIGINT, handle_sigint); /* Ctrl+C cancels current input, not exit */
+    signal(SIGWINCH, handle_sigwinch); /* resize */
     init_colors();
 }
 
@@ -766,6 +773,15 @@ static bool read_line(char *buffer, size_t size) {
     keypad(stdscr, TRUE);
     timeout(200);
     while (1) {
+        if (resize_requested) {
+            resize_requested = 0;
+            endwin();
+            refresh();
+            clear();
+            ui_draw_header(db_status);
+            ui_draw_divider();
+            move(BODY_START_ROW, 0);
+        }
         if (cancel_requested) {
             cancel_requested = 0;
             buffer[0] = '\0';
@@ -829,6 +845,27 @@ static bool read_command_line(const Database *db, char *buffer, size_t size) {
     timeout(500); /* check idle every 500ms */
     while (1) {
         int ch = getch();
+        if (resize_requested) {
+            resize_requested = 0;
+            endwin();
+            refresh();
+            clear();
+            ui_draw_header(db_status);
+            ui_clear_body();
+            ui_draw_divider();
+            move(LINES - 1, 0);
+            clrtoeol();
+            attron(COLOR_PAIR(FRAME_PAIR));
+            printw("vault");
+            attroff(COLOR_PAIR(FRAME_PAIR));
+            attron(COLOR_PAIR(TITLE_PAIR));
+            printw(">");
+            attroff(COLOR_PAIR(TITLE_PAIR));
+            printw(" ");
+            getyx(stdscr, starty, startx);
+            redraw_input_line(starty, startx, buffer, len, cursor);
+            continue;
+        }
         if (ch == ERR) {
             if (last_activity > 0) {
                 time_t now = time(NULL);
@@ -1032,6 +1069,16 @@ static bool read_password_obfuscated(char *buffer, size_t size) {
     keypad(stdscr, TRUE);
     timeout(200);
     while (1) {
+        if (resize_requested) {
+            resize_requested = 0;
+            endwin();
+            refresh();
+            clear();
+            ui_draw_header(db_status);
+            ui_draw_divider();
+            move(BODY_START_ROW, 0);
+            getyx(stdscr, starty, startx);
+        }
         if (cancel_requested) {
             cancel_requested = 0;
             buffer[0] = '\0';
