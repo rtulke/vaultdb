@@ -719,10 +719,6 @@ static void ui_center_box(const char *title, const char *body) {
         mvprintw(blank_y, startx + 2, "%-*s", inner_text, "");
     }
     /* footer with version bottom-right inside box, leaving 1 space from border */
-    int footer_len = (int)(strlen(PROGRAM_NAME) + strlen(PROGRAM_VERSION) + 3);
-    int footer_x = startx + width - 2 - 1 - footer_len;
-    if (footer_x < startx + 2) footer_x = startx + 2;
-    mvprintw(footer_y, footer_x, "%s v%s", PROGRAM_NAME, PROGRAM_VERSION);
     attroff(COLOR_PAIR(BODY_PAIR));
 
     ui_draw_divider();
