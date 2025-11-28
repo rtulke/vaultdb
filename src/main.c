@@ -1928,7 +1928,7 @@ static bool prompt_master_password(char *out, size_t size, bool first_time) {
         }
     }
     for (int attempt = 0; attempt < 3; ++attempt) {
-        ui_center_box("Unlock Vault", "Enter your master password.");
+        ui_center_box("Unlock Vault", "Enter your password to log in.");
         if (!prompt_password("Master password: ", input, sizeof(input))) return false;
         strncpy(out, input, size - 1);
         out[size - 1] = '\0';
