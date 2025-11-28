@@ -1360,7 +1360,6 @@ static void print_separator(void) {
     attron(COLOR_PAIR(FRAME_PAIR));
     hline(ACS_HLINE, COLS);
     attroff(COLOR_PAIR(FRAME_PAIR));
-    addch('\n');
 }
 
 static void print_cell(const char *s, int width) {
