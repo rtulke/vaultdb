@@ -1397,7 +1397,6 @@ static void print_entry_table(const Database *db, const int *indexes, size_t ind
     int w_tags = base + (rem > 3 ? 1 : 0);
     int w_status = base + (rem > 4 ? 1 : 0);
 
-    print_separator();
     attron(COLOR_PAIR(BODY_PAIR));
     printw("%-4s ", "ID");
     print_cell("Description", w_desc);
@@ -1411,7 +1410,11 @@ static void print_entry_table(const Database *db, const int *indexes, size_t ind
     print_cell("Status", w_status);
     addch('\n');
     attroff(COLOR_PAIR(BODY_PAIR));
-    print_separator();
+
+    attron(COLOR_PAIR(FRAME_PAIR));
+    for (int i = 0; i < COLS; ++i) addch('-');
+    attroff(COLOR_PAIR(FRAME_PAIR));
+    addch('\n');
 
     for (size_t i = 0; i < index_count; ++i) {
         const Entry *e = &db->items[indexes[i]];
