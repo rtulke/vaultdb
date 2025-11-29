@@ -4,7 +4,7 @@ Simple terminal-based password vault built with ncurses. It stores entries in a 
 
 
 Login                                  |  Help
-:-------------------------------------:|:-------:x----------------------------:
+:-------------------------------------:|:-----------------------------------:
 ![vaultdb login](demo/login.png)       | ![vaultdb help](demo/help.png) 
 ![vaultdb show_all](demo/show_all.png) | ![vaultdb show_id](demo/show_id.png)    
 
