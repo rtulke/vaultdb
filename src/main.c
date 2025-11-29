@@ -1860,7 +1860,6 @@ static void print_help(void) {
     printw("  clear                         Clear screen\n");
     printw("  quit/exit/q                   Exit\n");
     attroff(COLOR_PAIR(BODY_PAIR));
-    print_separator();
     refresh();
 }
 
