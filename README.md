@@ -2,7 +2,9 @@
 
 Simple terminal-based password vault built with ncurses. It stores entries in a CSV-like file that is lightly obfuscated. Intended for learning and experimentation, **not** for protecting real secrets.
 
-![vaultdb TUI demo](demo/help.png) ![vaultdb TUI demo](demo/show_id.png)
+![vaultdb help](demo/help.png) 
+![vaultdb show_all](demo/show_all.png)
+![vaultdb show_id](demo/show_id.png)
 
 
 ## Platform Support
