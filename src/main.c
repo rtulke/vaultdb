@@ -77,12 +77,17 @@ static size_t history_count = 0;
 static const char *clipboard_cmd = NULL;
 static int clipboard_type = 0; /* 1=pbcopy,2=xclip,3=xsel,4=wl-copy,5=clip */
 static const int CLIPBOARD_CLEAR_SECONDS = 10;
+static int last_view_indexes[MAX_ENTRIES];
+static size_t last_view_count = 0;
+static Database *last_view_db = NULL;
+static bool last_view_valid = false;
 
 /* Forward declarations for UI helpers used by logging */
 static void ui_clear_body(void);
 static void print_error_line(const char *msg);
 static void ui_draw_divider(void);
 static Entry *find_entry_by_id(Database *db, int id);
+static void print_entry_table(const Database *db, const int *indexes, size_t index_count);
 
 static void generate_password(char *out, size_t max_len, int length, int mode);
 
@@ -200,6 +205,19 @@ static void log_action(const char *fmt, ...) {
     vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
     append_log_entry(buf);
+}
+
+static void invalidate_view(void) {
+    last_view_valid = false;
+    last_view_count = 0;
+}
+
+static void render_last_view(void) {
+    if (!last_view_valid || !last_view_db || last_view_count == 0) return;
+    ui_clear_body();
+    move(BODY_START_ROW, 0);
+    print_entry_table(last_view_db, last_view_indexes, last_view_count);
+    refresh();
 }
 
 static void add_history_entry(const char *cmd) {
@@ -779,6 +797,7 @@ static bool read_line(char *buffer, size_t size) {
             refresh();
             clear();
             ui_draw_header(db_status);
+            render_last_view();
             ui_draw_divider();
             move(BODY_START_ROW, 0);
         }
@@ -851,6 +870,7 @@ static bool read_command_line(const Database *db, char *buffer, size_t size) {
             refresh();
             clear();
             ui_draw_header(db_status);
+            render_last_view();
             ui_clear_body();
             ui_draw_divider();
             move(LINES - 1, 0);
@@ -1075,6 +1095,7 @@ static bool read_password_obfuscated(char *buffer, size_t size) {
             refresh();
             clear();
             ui_draw_header(db_status);
+            render_last_view();
             ui_draw_divider();
             move(BODY_START_ROW, 0);
             getyx(stdscr, starty, startx);
@@ -1631,6 +1652,7 @@ static void add_entry(Database *db) {
     db->items[db->count++] = e;
     log_action("add id=%d", e.id);
     printw("Added entry with id %d\n", e.id);
+    invalidate_view();
     refresh();
 }
 
@@ -1658,6 +1680,7 @@ static void change_entry(Database *db, int id) {
     now_string(e->updatedate, sizeof(e->updatedate));
     log_action("change id=%d", id);
     printw("Updated entry %d\n", id);
+    invalidate_view();
     refresh();
 }
 
@@ -1717,6 +1740,7 @@ static void change_passwords_for_user(Database *db, const char *user) {
         printw("New password for user '%s': %s\n", user, new_pw);
     }
     printw("Passwords updated.\n");
+    invalidate_view();
     refresh();
 }
 
@@ -1756,11 +1780,12 @@ static bool change_master_password(Database *db, char *master) {
     }
     strncpy(master, new_pw, MAX_PASSWORD);
     master[MAX_PASSWORD] = '\0';
-    ui_show_message("Master password changed", "", 1200, true);
-    log_action("change_master_pw");
-    touch_activity();
-    return true;
-}
+        ui_show_message("Master password changed", "", 1200, true);
+        log_action("change_master_pw");
+        invalidate_view();
+        touch_activity();
+        return true;
+    }
 
 static void remove_entries(Database *db, int *ids, size_t id_count) {
     char input[MAX_LINE];
@@ -1803,6 +1828,7 @@ static void remove_entries(Database *db, int *ids, size_t id_count) {
     }
     log_action("rm ids=%s count=%zu", buf, id_count);
     printw("Deletion complete.\n");
+    invalidate_view();
     refresh();
 }
 
@@ -1847,6 +1873,12 @@ static void show_filtered(const Database *db, const int *indexes, size_t count) 
         return;
     }
     print_entry_table(db, indexes, count);
+    if (count > 0 && count <= MAX_ENTRIES) {
+        last_view_db = (Database *)db;
+        last_view_count = count;
+        for (size_t i = 0; i < count; ++i) last_view_indexes[i] = indexes[i];
+        last_view_valid = true;
+    }
     refresh();
 }
 
@@ -2000,6 +2032,7 @@ static bool unlock_vault(Database *db, char *master) {
             ui_draw_header(db_status);
             touch_activity();
             log_action("unlock");
+            invalidate_view();
             return true;
         }
         ui_show_message("Unlock failed", "Invalid password or corrupted DB.", 1500, true);
@@ -2162,6 +2195,7 @@ int main(int argc, char **argv) {
             db_status = DB_STATUS_OFFLINE;
             ui_draw_header(db_status);
             log_action("lock");
+            invalidate_view();
             ui_clear_body();
             move(BODY_START_ROW, 0);
             printw("Vault locked. Enter master password to continue.\n");
