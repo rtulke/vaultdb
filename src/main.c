@@ -1530,7 +1530,6 @@ static void print_entry_detail(const Entry *e) {
     printw("Status: %s\n", e->status);
     printw("Comment:\n%s\n", e->comment);
     attroff(COLOR_PAIR(BODY_PAIR));
-    print_separator();
 }
 
 /* Wizards */
