@@ -81,6 +81,9 @@ static int last_view_indexes[MAX_ENTRIES];
 static size_t last_view_count = 0;
 static Database *last_view_db = NULL;
 static bool last_view_valid = false;
+static int last_detail_id = -1;
+static bool last_detail_reveal = false;
+static bool last_detail_valid = false;
 
 /* Forward declarations for UI helpers used by logging */
 static void ui_clear_body(void);
@@ -1516,19 +1519,22 @@ static bool copy_password_to_clipboard(const Database *db, int id) {
     return true;
 }
 
-static void print_entry_detail(const Entry *e) {
+static void print_entry_detail(const Entry *e, bool reveal_pw) {
     print_separator();
     attron(COLOR_PAIR(BODY_PAIR));
     printw("ID: %d\n", e->id);
     printw("Description: %s\n", e->description);
     printw("User: %s\n", e->user);
-    printw("Password: %s\n", e->password);
+    printw("Password: %s\n", reveal_pw ? e->password : "********");
     printw("URL: %s\n", e->url);
     printw("Tags: %s\n", e->tags);
     printw("Created: %s\n", e->createdate);
     printw("Last Update: %s\n", e->updatedate);
     printw("Status: %s\n", e->status);
     printw("Comment:\n%s\n", e->comment);
+    if (!reveal_pw) {
+        printw("\n(Press T to toggle password visibility.)\n");
+    }
     attroff(COLOR_PAIR(BODY_PAIR));
 }
 
@@ -1680,6 +1686,7 @@ static void change_entry(Database *db, int id) {
     log_action("change id=%d", id);
     printw("Updated entry %d\n", id);
     invalidate_view();
+    last_detail_valid = false;
     refresh();
 }
 
@@ -1740,6 +1747,7 @@ static void change_passwords_for_user(Database *db, const char *user) {
     }
     printw("Passwords updated.\n");
     invalidate_view();
+    last_detail_valid = false;
     refresh();
 }
 
@@ -1780,11 +1788,12 @@ static bool change_master_password(Database *db, char *master) {
     strncpy(master, new_pw, MAX_PASSWORD);
     master[MAX_PASSWORD] = '\0';
         ui_show_message("Master password changed", "", 1200, true);
-        log_action("change_master_pw");
-        invalidate_view();
-        touch_activity();
-        return true;
-    }
+    log_action("change_master_pw");
+    invalidate_view();
+    last_detail_valid = false;
+    touch_activity();
+    return true;
+}
 
 static void remove_entries(Database *db, int *ids, size_t id_count) {
     char input[MAX_LINE];
@@ -1828,6 +1837,7 @@ static void remove_entries(Database *db, int *ids, size_t id_count) {
     log_action("rm ids=%s count=%zu", buf, id_count);
     printw("Deletion complete.\n");
     invalidate_view();
+    last_detail_valid = false;
     refresh();
 }
 
@@ -1870,6 +1880,7 @@ static void show_filtered(const Database *db, const int *indexes, size_t count) 
         print_error_line("No entries found.");
         return;
     }
+    last_detail_valid = false;
     print_entry_table(db, indexes, count);
     if (count > 0 && count <= MAX_ENTRIES) {
         last_view_db = (Database *)db;
@@ -1959,7 +1970,10 @@ static void handle_show(Database *db, char **tokens, int token_count) {
         } else {
             ui_clear_body();
             move(BODY_START_ROW, 0);
-            print_entry_detail(e);
+            last_detail_id = id;
+            last_detail_reveal = false;
+            last_detail_valid = true;
+            print_entry_detail(e, last_detail_reveal);
             refresh();
         }
         return;
@@ -2156,6 +2170,7 @@ int main(int argc, char **argv) {
         } else if (strcmp(tokens[0], "add") == 0 && token_count >= 2 && strcmp(tokens[1], "pw") == 0) {
             add_entry(&db);
             save_database(&db, db_path, master);
+            last_detail_valid = false;
         } else if (strcmp(tokens[0], "change") == 0 && token_count == 2 && strcmp(tokens[1], "master-pw") == 0) {
             change_master_password(&db, master);
         } else if (strcmp(tokens[0], "change") == 0 && token_count == 2) {
@@ -2173,6 +2188,7 @@ int main(int argc, char **argv) {
             }
             remove_entries(&db, ids, id_count);
             save_database(&db, db_path, master);
+            last_detail_valid = false;
         } else if (strcmp(tokens[0], "version") == 0) {
             ui_clear_body();
             move(BODY_START_ROW, 0);
@@ -2218,6 +2234,20 @@ int main(int argc, char **argv) {
                 printw("Password copied to clipboard for %d seconds.\n", CLIPBOARD_CLEAR_SECONDS);
             }
             refresh();
+        } else if ((strcmp(tokens[0], "T") == 0 || strcmp(tokens[0], "toggle") == 0) && last_detail_valid) {
+            Entry *e = find_entry_by_id(&db, last_detail_id);
+            if (!e) {
+                ui_clear_body();
+                move(BODY_START_ROW, 0);
+                print_error_line("No entry to toggle.");
+                last_detail_valid = false;
+            } else {
+                last_detail_reveal = !last_detail_reveal;
+                ui_clear_body();
+                move(BODY_START_ROW, 0);
+                print_entry_detail(e, last_detail_reveal);
+                refresh();
+            }
         } else if (strcmp(tokens[0], "quit") == 0 || strcmp(tokens[0], "exit") == 0 || strcmp(tokens[0], "q") == 0) {
             save_database(&db, db_path, master);
             break;
