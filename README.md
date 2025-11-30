@@ -102,12 +102,13 @@ Interactive vault for keeping test credentials: add, view, edit, delete entries 
 | `history clear` | Clear command history log. |
 | `clear` | Clear the screen. |
 | `version` | Show version/author info. |
+| `T` | Toggle password visibility in the last shown detail view. |
 | `quit` / `exit` / `q` | Save and exit. |
 
 ### Keyboard shortcuts
 | Shortcut | Action |
 | :--- | :--- |
-| `Ctrl+T` / `toggle` | Toggle password visibility in the last shown detail view. |
+| `Ctrl+T` | Toggle password visibility in the last shown detail view. |
 | `Ctrl+C` | Cancel current input (does not exit the app). |
 | `Ctrl+D` | End input (prompts return empty/exit current prompt). |
 | `Ctrl+A` | Move cursor to start of line. |
