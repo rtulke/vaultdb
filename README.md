@@ -131,18 +131,21 @@ Interactive vault for keeping test credentials: add, view, edit, delete entries 
 - Wizard-driven entry creation and edits, including optional password generation.
 
 ## TODO / Ideas
-- Strong encryption: replace XOR with AES-GCM plus Argon2id/PBKDF2 key derivation and auth tag checks.
-- Export/Import: CSV/JSON export/import; optional encrypted export; warn on plaintext exports.
+- Strong encryption & KDF: AES-GCM + Argon2id (configurable memory/iterations) with auth-tag check.
 - Master password policies: length/complexity checks and weak-password warnings.
-- Backups: automatic, encrypted rolling backups on save.
-- Advanced search: fuzzy matching, combined filters (tag+user+status), sortable lists.
-- Clipboard options: configurable timeout; copy user/URL/OTP if present.
-- Config file/flags: defaults for DB path, auto-lock, clipboard timeout, colors, readonly mode.
-- Entry extras: TOTP field and generator, expiry/reminder field, favorites, templates (web/API/SSH).
-- Key rotation: master-password rotation with re-encryption in one step.
-- Output/automation: quick search alias, optional `--json` output for scripting.
-- Audit toggles: allow disabling or reducing log verbosity.
-- Tests: automated tests for parsing/save/load/encryption and basic TUI flows; fuzz CSV parser.
+- Field-level extras: OTP/TOTP fields, security questions, favorite/starred flag.
+- Password reveal toggle in detail view (not only table masking).
+- Entry expiry/reminders: expiry date with warning for expired entries.
+- Backup/Import/Export: encrypted export/import (age/openssl), warn on plaintext; auto encrypted backup on save.
+- Search/Filter: fuzzy search, combined filters (tag+user+status), sorting (updated desc/status), quick search alias, optional `--json` output.
+- Clipboard enhancements: configurable timeout; copy user/URL/OTP.
+- Audit/log options: toggle logging or reduce to errors/events without command text.
+- Config file: `~/.vaultdbrc` for defaults (DB path, auto-lock, clipboard timeout, colors, readonly).
+- Multimaster/Key rotation: rotate master password with re-encrypt in one step.
+- Entry templates: predefined templates (Web, SSH, API token) with suitable fields/status.
+- TOTP: store secret and generate codes (if dependencies acceptable).
+- Quick search: global `find` alias and optional `--json` output for scripting.
+- Tests: unit tests for parser/save/load/encrypt; integration test (temp DB add/show/rm); fuzz CSV parser.
 ## Brute-force testing helpers
 Purpose-built for demonstrations to highlight the weak XOR obfuscation. Do not use for unauthorized access.
 
