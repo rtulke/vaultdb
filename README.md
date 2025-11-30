@@ -130,6 +130,17 @@ Interactive vault for keeping test credentials: add, view, edit, delete entries 
 - Action logging with timestamps for add/change/delete/password ops and lock/unlock events.
 - Wizard-driven entry creation and edits, including optional password generation.
 
+## TODO / Ideas
+- Strong encryption: replace XOR with AES-GCM plus Argon2id/PBKDF2 key derivation and auth tag checks.
+- Export/Import: CSV/JSON export/import; optional encrypted export; warn on plaintext exports.
+- Master password policies: length/complexity checks and weak-password warnings.
+- Backups: automatic, encrypted rolling backups on save.
+- Advanced search: fuzzy matching, combined filters (tag+user+status), sortable lists.
+- Clipboard options: configurable timeout; copy user/URL/OTP if present.
+- Config file/flags: defaults for DB path, auto-lock, clipboard timeout, colors, readonly mode.
+- Entry extras: TOTP field and generator, expiry/reminder field, favorites, templates (web/API/SSH).
+- Audit toggles: allow disabling or reducing log verbosity.
+- Tests: automated tests for parsing/save/load/encryption and basic TUI flows; fuzz CSV parser.
 ## Brute-force testing helpers
 Purpose-built for demonstrations to highlight the weak XOR obfuscation. Do not use for unauthorized access.
 
