@@ -1581,7 +1581,7 @@ static void print_entry_detail(const Entry *e, bool reveal_pw) {
     printw("Status: %s\n", e->status);
     printw("Comment:\n%s\n", e->comment);
     if (!reveal_pw) {
-        printw("\n(Press T to toggle password visibility.)\n");
+        printw("\n(Press Ctrl+T to toggle password visibility.)\n");
     }
     attroff(COLOR_PAIR(BODY_PAIR));
 }
