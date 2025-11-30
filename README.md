@@ -91,7 +91,6 @@ Interactive vault for keeping test credentials: add, view, edit, delete entries 
 | `show date <dd.mm.yyyy>` | List entries created or updated on that date (prefix match). |
 | `show status <value>` | List entries with a given status. |
 | `show find <t1> [t2...]` | Search terms across description/user/url/tags/comment/status (all terms must match). |
-| `Ctrl+T` / `toggle` | Toggle password visibility in the last shown detail view. |
 | `add pw` | Add a new entry via wizard. |
 | `change <id>` | Edit an entry via wizard. |
 | `change pw <user>` | Replace all passwords for a user (optionally generate). |
@@ -108,6 +107,7 @@ Interactive vault for keeping test credentials: add, view, edit, delete entries 
 ### Keyboard shortcuts
 | Shortcut | Action |
 | :--- | :--- |
+| `Ctrl+T` / `toggle` | Toggle password visibility in the last shown detail view. |
 | `Ctrl+C` | Cancel current input (does not exit the app). |
 | `Ctrl+D` | End input (prompts return empty/exit current prompt). |
 | `Ctrl+A` | Move cursor to start of line. |
