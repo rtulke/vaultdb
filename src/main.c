@@ -84,6 +84,7 @@ static bool last_view_valid = false;
 static int last_detail_id = -1;
 static bool last_detail_reveal = false;
 static bool last_detail_valid = false;
+static Database *last_detail_db = NULL;
 
 /* Forward declarations for UI helpers used by logging */
 static void ui_clear_body(void);
@@ -91,6 +92,7 @@ static void print_error_line(const char *msg);
 static void ui_draw_divider(void);
 static Entry *find_entry_by_id(Database *db, int id);
 static void print_entry_table(const Database *db, const int *indexes, size_t index_count);
+static void print_entry_detail(const Entry *e, bool reveal_pw);
 
 static void generate_password(char *out, size_t max_len, int length, int mode);
 
@@ -213,6 +215,26 @@ static void log_action(const char *fmt, ...) {
 static void invalidate_view(void) {
     last_view_valid = false;
     last_view_count = 0;
+}
+
+static void invalidate_detail(void) {
+    last_detail_valid = false;
+    last_detail_db = NULL;
+    last_detail_id = -1;
+    last_detail_reveal = false;
+}
+
+static void render_last_detail(void) {
+    if (!last_detail_valid || !last_detail_db) return;
+    Entry *e = find_entry_by_id(last_detail_db, last_detail_id);
+    if (!e) {
+        invalidate_detail();
+        return;
+    }
+    ui_clear_body();
+    move(BODY_START_ROW, 0);
+    print_entry_detail(e, last_detail_reveal);
+    refresh();
 }
 
 static void render_last_view(void) {
@@ -800,7 +822,11 @@ static bool read_line(char *buffer, size_t size) {
             refresh();
             clear();
             ui_draw_header(db_status);
-            render_last_view();
+            if (last_detail_valid) {
+                render_last_detail();
+            } else {
+                render_last_view();
+            }
             ui_draw_divider();
             move(BODY_START_ROW, 0);
         }
@@ -1658,6 +1684,7 @@ static void add_entry(Database *db) {
     log_action("add id=%d", e.id);
     printw("Added entry with id %d\n", e.id);
     invalidate_view();
+    invalidate_detail();
     refresh();
 }
 
@@ -1686,7 +1713,7 @@ static void change_entry(Database *db, int id) {
     log_action("change id=%d", id);
     printw("Updated entry %d\n", id);
     invalidate_view();
-    last_detail_valid = false;
+    invalidate_detail();
     refresh();
 }
 
@@ -1747,7 +1774,7 @@ static void change_passwords_for_user(Database *db, const char *user) {
     }
     printw("Passwords updated.\n");
     invalidate_view();
-    last_detail_valid = false;
+    invalidate_detail();
     refresh();
 }
 
@@ -1790,7 +1817,7 @@ static bool change_master_password(Database *db, char *master) {
         ui_show_message("Master password changed", "", 1200, true);
     log_action("change_master_pw");
     invalidate_view();
-    last_detail_valid = false;
+    invalidate_detail();
     touch_activity();
     return true;
 }
@@ -1837,7 +1864,7 @@ static void remove_entries(Database *db, int *ids, size_t id_count) {
     log_action("rm ids=%s count=%zu", buf, id_count);
     printw("Deletion complete.\n");
     invalidate_view();
-    last_detail_valid = false;
+    invalidate_detail();
     refresh();
 }
 
@@ -1973,6 +2000,7 @@ static void handle_show(Database *db, char **tokens, int token_count) {
             last_detail_id = id;
             last_detail_reveal = false;
             last_detail_valid = true;
+            last_detail_db = db;
             print_entry_detail(e, last_detail_reveal);
             refresh();
         }

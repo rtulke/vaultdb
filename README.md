@@ -91,7 +91,7 @@ Interactive vault for keeping test credentials: add, view, edit, delete entries 
 | `show date <dd.mm.yyyy>` | List entries created or updated on that date (prefix match). |
 | `show status <value>` | List entries with a given status. |
 | `show find <t1> [t2...]` | Search terms across description/user/url/tags/comment/status (all terms must match). |
-| `T` / `toggle` | Toggle password visibility in the last shown detail view. |
+| `Ctrl+T` / `toggle` | Toggle password visibility in the last shown detail view. |
 | `add pw` | Add a new entry via wizard. |
 | `change <id>` | Edit an entry via wizard. |
 | `change pw <user>` | Replace all passwords for a user (optionally generate). |
@@ -126,7 +126,7 @@ Interactive vault for keeping test credentials: add, view, edit, delete entries 
 - Cross-field search via `show find` (description/user/url/tags/comment/status).
 - Copy password to clipboard for 10s via `copy <id>` (pbcopy/xclip/xsel/wl-copy/clip).
 - Passwords are masked in table views; view details or copy to clipboard to reveal.
-- Toggle password visibility in detail view via `T`/`toggle` after a `show <id>`.
+- Toggle password visibility in detail view via `Ctrl+T`/`toggle` after a `show <id>`.
 - Obfuscated CSV database persisted to `~/.vault.db` (or system locations when root).
 - Command history logging to `~/.vault.log`.
 - Action logging with timestamps for add/change/delete/password ops and lock/unlock events.
