@@ -915,6 +915,28 @@ static bool read_command_line(const Database *db, char *buffer, size_t size) {
             redraw_input_line(starty, startx, buffer, len, cursor);
             continue;
         }
+        if (ch == 20) { /* Ctrl+T toggle detail password */
+            if (last_detail_valid) {
+                touch_activity();
+                last_detail_reveal = !last_detail_reveal;
+                render_last_detail();
+                ui_draw_divider();
+                move(LINES - 1, 0);
+                clrtoeol();
+                attron(COLOR_PAIR(FRAME_PAIR));
+                printw("vault");
+                attroff(COLOR_PAIR(FRAME_PAIR));
+                attron(COLOR_PAIR(TITLE_PAIR));
+                printw(">");
+                attroff(COLOR_PAIR(TITLE_PAIR));
+                printw(" ");
+                getyx(stdscr, starty, startx);
+                redraw_input_line(starty, startx, buffer, len, cursor);
+            } else {
+                beep();
+            }
+            continue;
+        }
         if (ch == ERR) {
             if (last_activity > 0) {
                 time_t now = time(NULL);
