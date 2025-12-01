@@ -167,9 +167,9 @@ python3 scripts/bruteforce.py exhaustive --db ~/.vault.db --min-len 4 --max-len 
 ```
 Enumerates every combination in the length range using charset presets:
  - `digits`, `letters`, `alnum`, `special`, `digits-special`, `letters-special`, `alnum-special`
- - `--special` overrides the special-character set for presets that include specials.
-- `--workers` sets parallel processes (default: detected CPU cores). Note that search space grows exponentially with length; keep ranges small for tests.
-- Common special-character sets in real-world passwords often include symbols like `!@#$%^&*()-_=+[]{};:'",.<>/?\`~`. Use `--special` to reflect the set you want to test.
+ - `--special` overrides the special-character set for presets that include specials. 
+ - `--workers` sets parallel processes (default: detected CPU cores). Note that search space grows exponentially with length; keep ranges small for tests.
+ - Common special-character sets in real-world passwords often include symbols like `!@#$%^&*()-_=+[]{};:'",.<>/?\`~`. Use `--special` to reflect the set you want to test.
 
 ### Parameter reference (bruteforce.py)
 
@@ -187,6 +187,8 @@ Enumerates every combination in the length range using charset presets:
 | `--progress-every N` | both | Print progress every N attempts (defaults: 100000 wordlist, 50000 exhaustive). |
 | `--max-matches N` | both | Stop after N matches (default: 1). |
 | `--quiet` | both | Suppress progress output. |
+
+### Definition of Charset Presets
 
 | Charset presets  | Description |
 | :--------------- | :-----------|
