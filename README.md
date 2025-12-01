@@ -135,6 +135,10 @@ Interactive vault for keeping test credentials: add, view, edit, delete entries 
 - Action logging with timestamps for add/change/delete/password ops and lock/unlock events.
 - Wizard-driven entry creation and edits, including optional password generation.
 
+### Password generator presets (wizard)
+- `1` digits, `2` letters, `3` alnum, `4` digits+specials, `5` letters+specials, `6` alnum+specials, `7` alnum+common-special.
+- Special set defaults to `!@#$%^&*()-_=+[]{};:'",.<>/?\`~`; can be overridden when choosing a special mode.
+
 ## TODO / Ideas
 - Strong encryption & KDF: AES-GCM + Argon2id (configurable memory/iterations) with auth-tag check.
 - Master password policies: length/complexity checks and weak-password warnings.

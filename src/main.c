@@ -23,6 +23,7 @@
 #define MAX_LINE 2048
 #define MAX_OTP 64
 #define MAX_SECURITY_Q 256
+#define MAX_SPECIAL_SET 128
 
 #define FRAME_PAIR 1
 #define TITLE_PAIR 2
@@ -74,6 +75,7 @@ static const char *DB_STATUS_ONLINE = "unlocked";
 static const char *db_status = "locked";
 static char db_path[MAX_PATH_LEN] = "vault.db";
 static char log_path[MAX_PATH_LEN] = "";
+static const char *DEFAULT_SPECIALS = "!@#$%^&*()-_=+[]{};:'\",.<>/?`~";
 static time_t last_activity = 0;
 static volatile sig_atomic_t cancel_requested = 0;
 static volatile sig_atomic_t resize_requested = 0;
@@ -99,7 +101,7 @@ static Entry *find_entry_by_id(Database *db, int id);
 static void print_entry_table(const Database *db, const int *indexes, size_t index_count);
 static void print_entry_detail(const Entry *e, bool reveal_pw);
 
-static void generate_password(char *out, size_t max_len, int length, int mode);
+static void generate_password(char *out, size_t max_len, int length, int mode, const char *custom_specials);
 
 /* Utility helpers */
 static int strcasecmp_portable(const char *a, const char *b) {
@@ -1647,12 +1649,18 @@ static bool wizard_fill_entry(Entry *e, const char *user_default) {
         printw("\n");
         int len = atoi(input);
         if (len <= 0 || len > MAX_PASSWORD) len = 16;
-        printw("Mode (1=numbers, 2=alnum, 3=alnum+special): ");
+        printw("Mode (1=digits, 2=letters, 3=alnum, 4=digits+special, 5=letters+special, 6=alnum+special, 7=alnum+common-special): ");
         if (!read_line(input, sizeof(input)) || was_cancelled()) return false;
         printw("\n");
         int mode = atoi(input);
-        if (mode < 1 || mode > 3) mode = 2;
-        generate_password(e->password, sizeof(e->password), len, mode);
+        if (mode < 1 || mode > 7) mode = 3;
+        char specials[MAX_SPECIAL_SET] = {0};
+        if (mode >= 4 && mode <= 6) {
+            printw("Special characters (Enter for default %s): ", DEFAULT_SPECIALS);
+            if (!read_line(specials, sizeof(specials)) || was_cancelled()) return false;
+            printw("\n");
+        }
+        generate_password(e->password, sizeof(e->password), len, mode, specials);
         printw("Generated password: %s\n", e->password);
     } else {
         printw("Password (%s): ", e->password);
@@ -1703,19 +1711,46 @@ static bool wizard_fill_entry(Entry *e, const char *user_default) {
 }
 
 /* Generators */
-static void generate_password(char *out, size_t max_len, int length, int mode) {
+static void generate_password(char *out, size_t max_len, int length, int mode, const char *custom_specials) {
     const char *digits = "0123456789";
     const char *letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    const char *special = ";.,#-_%&$+'";
+    const char *specials = (custom_specials && custom_specials[0]) ? custom_specials : DEFAULT_SPECIALS;
 
-    char charset[256] = {0};
+    char charset[512] = {0};
     charset[0] = '\0';
-    strncat(charset, digits, sizeof(charset) - strlen(charset) - 1);
-    if (mode >= 2) {
-        strncat(charset, letters, sizeof(charset) - strlen(charset) - 1);
-    }
-    if (mode >= 3) {
-        strncat(charset, special, sizeof(charset) - strlen(charset) - 1);
+    switch (mode) {
+        case 1: /* digits */
+            strncat(charset, digits, sizeof(charset) - strlen(charset) - 1);
+            break;
+        case 2: /* letters */
+            strncat(charset, letters, sizeof(charset) - strlen(charset) - 1);
+            break;
+        case 3: /* alnum */
+            strncat(charset, letters, sizeof(charset) - strlen(charset) - 1);
+            strncat(charset, digits, sizeof(charset) - strlen(charset) - 1);
+            break;
+        case 4: /* digits + special */
+            strncat(charset, digits, sizeof(charset) - strlen(charset) - 1);
+            strncat(charset, specials, sizeof(charset) - strlen(charset) - 1);
+            break;
+        case 5: /* letters + special */
+            strncat(charset, letters, sizeof(charset) - strlen(charset) - 1);
+            strncat(charset, specials, sizeof(charset) - strlen(charset) - 1);
+            break;
+        case 6: /* alnum + special */
+            strncat(charset, letters, sizeof(charset) - strlen(charset) - 1);
+            strncat(charset, digits, sizeof(charset) - strlen(charset) - 1);
+            strncat(charset, specials, sizeof(charset) - strlen(charset) - 1);
+            break;
+        case 7: /* common-special (letters+digits+default specials) */
+            strncat(charset, letters, sizeof(charset) - strlen(charset) - 1);
+            strncat(charset, digits, sizeof(charset) - strlen(charset) - 1);
+            strncat(charset, DEFAULT_SPECIALS, sizeof(charset) - strlen(charset) - 1);
+            break;
+        default: /* fallback alnum */
+            strncat(charset, letters, sizeof(charset) - strlen(charset) - 1);
+            strncat(charset, digits, sizeof(charset) - strlen(charset) - 1);
+            break;
     }
 
     size_t charset_len = strlen(charset);
@@ -1822,14 +1857,22 @@ static void change_passwords_for_user(Database *db, const char *user) {
         }
         len = atoi(input);
         if (len <= 0 || len > MAX_PASSWORD) len = 16;
-        printw("Mode (1=numbers, 2=alnum, 3=alnum+special): ");
+        printw("Mode (1=digits, 2=letters, 3=alnum, 4=digits+special, 5=letters+special, 6=alnum+special, 7=alnum+common-special): ");
         if (!read_line(input, sizeof(input)) || was_cancelled()) {
             cancelled_and_clear();
             return;
         }
         mode = atoi(input);
-        if (mode < 1 || mode > 3) mode = 2;
-        generate_password(new_pw, sizeof(new_pw), len, mode);
+        if (mode < 1 || mode > 7) mode = 3;
+        char specials[MAX_SPECIAL_SET] = {0};
+        if (mode >= 4 && mode <= 6) {
+            printw("Special characters (Enter for default %s): ", DEFAULT_SPECIALS);
+            if (!read_line(specials, sizeof(specials)) || was_cancelled()) {
+                cancelled_and_clear();
+                return;
+            }
+        }
+        generate_password(new_pw, sizeof(new_pw), len, mode, specials);
     } else {
         printw("Enter new password: ");
         if (!read_line(new_pw, sizeof(new_pw)) || was_cancelled()) {
