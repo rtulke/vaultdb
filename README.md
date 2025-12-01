@@ -21,6 +21,7 @@ show all                               | show id
 - The master password gates access but should be considered easily brute-forced if the DB is obtained.
 
 **How XOR obfuscation works (toy example):**
+
 Let `P` be a plaintext byte and `K` the matching byte of the key. The stored byte is `C = P ⊕ K`. To read, compute `P = C ⊕ K`. Example: `P = 0x41 ('A')`, `K = 0x2B`, then `C = 0x41 ⊕ 0x2B = 0x6A`; recovering: `0x6A ⊕ 0x2B = 0x41`.
 
 ## Installation
