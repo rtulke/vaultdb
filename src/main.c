@@ -21,6 +21,8 @@
 #define MAX_STATUS 16
 #define MAX_DATE 64
 #define MAX_LINE 2048
+#define MAX_OTP 64
+#define MAX_SECURITY_Q 256
 
 #define FRAME_PAIR 1
 #define TITLE_PAIR 2
@@ -49,6 +51,9 @@ typedef struct {
     char createdate[MAX_DATE + 1];
     char updatedate[MAX_DATE + 1];
     char status[MAX_STATUS + 1];
+    char otp[MAX_OTP + 1];
+    char security_question[MAX_SECURITY_Q + 1];
+    bool favorite;
 } Entry;
 
 typedef struct {
@@ -57,7 +62,7 @@ typedef struct {
     int next_id;
 } Database;
 
-static const char *HEADER = "id,description,user,password,url,comment,tags,createdate,updatedate,status";
+static const char *HEADER = "id,description,user,password,url,comment,tags,createdate,updatedate,status,otp,security_question,favorite";
 static const char *PROGRAM_NAME = "vaultdb";
 static const char *PROGRAM_VERSION = "0.1.0";
 static const char *PROGRAM_AUTHOR = "Robert Tulke <rt@debian.sh>";
@@ -1312,6 +1317,18 @@ static bool save_database(const Database *db, const char *path, const char *mast
 
         csv_escape(e->status, field, sizeof(field));
         strncat(row, field, sizeof(row) - strlen(row) - 1);
+        strncat(row, ",", sizeof(row) - strlen(row) - 1);
+
+        csv_escape(e->otp, field, sizeof(field));
+        strncat(row, field, sizeof(row) - strlen(row) - 1);
+        strncat(row, ",", sizeof(row) - strlen(row) - 1);
+
+        csv_escape(e->security_question, field, sizeof(field));
+        strncat(row, field, sizeof(row) - strlen(row) - 1);
+        strncat(row, ",", sizeof(row) - strlen(row) - 1);
+
+        snprintf(field, sizeof(field), "%d", e->favorite ? 1 : 0);
+        strncat(row, field, sizeof(row) - strlen(row) - 1);
         strncat(row, "\n", sizeof(row) - strlen(row) - 1);
 
         if (!append_text(&plain, &len, &cap, row)) {
@@ -1330,7 +1347,7 @@ static bool save_database(const Database *db, const char *path, const char *mast
 }
 
 static bool parse_line_to_entry(const char *line, Entry *e) {
-    char fields[10][MAX_LINE] = {{0}};
+    char fields[13][MAX_LINE] = {{0}};
     int field_idx = 0;
     bool in_quote = false;
     bool escape = false;
@@ -1355,14 +1372,14 @@ static bool parse_line_to_entry(const char *line, Entry *e) {
             fields[field_idx][pos] = '\0';
             field_idx++;
             pos = 0;
-            if (field_idx >= 10) break;
+            if (field_idx >= 13) break;
             continue;
         }
         if (pos + 1 < sizeof(fields[0])) fields[field_idx][pos++] = ch;
     }
     fields[field_idx][pos] = '\0';
     field_idx++;
-    if (field_idx != 10) return false;
+    if (field_idx != 13 && field_idx != 10) return false;
 
     e->id = atoi(fields[0]);
     strncpy(e->description, fields[1], sizeof(e->description) - 1);
@@ -1374,6 +1391,15 @@ static bool parse_line_to_entry(const char *line, Entry *e) {
     strncpy(e->createdate, fields[7], sizeof(e->createdate) - 1);
     strncpy(e->updatedate, fields[8], sizeof(e->updatedate) - 1);
     strncpy(e->status, fields[9], sizeof(e->status) - 1);
+    if (field_idx == 13) {
+        strncpy(e->otp, fields[10], sizeof(e->otp) - 1);
+        strncpy(e->security_question, fields[11], sizeof(e->security_question) - 1);
+        e->favorite = atoi(fields[12]) != 0;
+    } else {
+        e->otp[0] = '\0';
+        e->security_question[0] = '\0';
+        e->favorite = false;
+    }
     return true;
 }
 
@@ -1502,7 +1528,7 @@ static void print_cell(const char *s, int width) {
 
 static void print_entry_table(const Database *db, const int *indexes, size_t index_count) {
     const char *hidden_pw = "********";
-    const int var_cols = 5;
+    const int var_cols = 6;
     int spacing = var_cols; /* spaces between columns (ID + 5 cols => 5 spaces) */
     int avail = COLS - 4 - spacing;
     if (avail < var_cols * 6) avail = var_cols * 6;
@@ -1513,6 +1539,7 @@ static void print_entry_table(const Database *db, const int *indexes, size_t ind
     int w_pw = base + (rem > 2 ? 1 : 0);
     int w_tags = base + (rem > 3 ? 1 : 0);
     int w_status = base + (rem > 4 ? 1 : 0);
+    int w_fav = base + (rem > 5 ? 1 : 0);
 
     int row = getcury(stdscr);
 
@@ -1528,6 +1555,8 @@ static void print_entry_table(const Database *db, const int *indexes, size_t ind
     print_cell("Tags", w_tags);
     addch(' ');
     print_cell("Status", w_status);
+    addch(' ');
+    print_cell("Fav", w_fav);
     attroff(COLOR_PAIR(BODY_PAIR));
     row++;
 
@@ -1551,6 +1580,8 @@ static void print_entry_table(const Database *db, const int *indexes, size_t ind
         print_cell(e->tags, w_tags);
         addch(' ');
         print_cell(e->status, w_status);
+        addch(' ');
+        print_cell(e->favorite ? "*" : "", w_fav);
         attroff(COLOR_PAIR(BODY_PAIR));
         row++;
     }
@@ -1579,6 +1610,9 @@ static void print_entry_detail(const Entry *e, bool reveal_pw) {
     printw("Created: %s\n", e->createdate);
     printw("Last Update: %s\n", e->updatedate);
     printw("Status: %s\n", e->status);
+    printw("Favorite: %s\n", e->favorite ? "yes" : "no");
+    if (e->otp[0]) printw("OTP/TOTP: %s\n", e->otp);
+    if (e->security_question[0]) printw("Security Question: %s\n", e->security_question);
     printw("Comment:\n%s\n", e->comment);
     if (!reveal_pw) {
         printw("\n(Press Ctrl+T to toggle password visibility.)\n");
@@ -1637,6 +1671,25 @@ static bool wizard_fill_entry(Entry *e, const char *user_default) {
     printw("\n");
     if (strlen(input) > 0) strncpy(e->tags, input, sizeof(e->tags) - 1);
 
+    printw("OTP/TOTP secret (%s): ", e->otp[0] ? e->otp : "none");
+    if (!read_line(input, sizeof(input)) || was_cancelled()) return false;
+    printw("\n");
+    if (strlen(input) > 0) strncpy(e->otp, input, sizeof(e->otp) - 1);
+
+    printw("Security question (%s): ", e->security_question[0] ? e->security_question : "none");
+    if (!read_line(input, sizeof(input)) || was_cancelled()) return false;
+    printw("\n");
+    if (strlen(input) > 0) strncpy(e->security_question, input, sizeof(e->security_question) - 1);
+
+    printw("Favorite? (y/n) [%c]: ", e->favorite ? 'y' : 'n');
+    if (!read_line(input, sizeof(input)) || was_cancelled()) return false;
+    printw("\n");
+    if (tolower((unsigned char)input[0]) == 'y') {
+        e->favorite = true;
+    } else if (tolower((unsigned char)input[0]) == 'n') {
+        e->favorite = false;
+    }
+
     printw("Comment (%s): ", e->comment);
     if (!read_line(input, sizeof(input)) || was_cancelled()) return false;
     printw("\n");
@@ -1694,6 +1747,9 @@ static void add_entry(Database *db) {
     strncpy(e.comment, "", sizeof(e.comment) - 1);
     strncpy(e.tags, "", sizeof(e.tags) - 1);
     strncpy(e.status, "active", sizeof(e.status) - 1);
+    e.otp[0] = '\0';
+    e.security_question[0] = '\0';
+    e.favorite = false;
     now_string(e.createdate, sizeof(e.createdate));
     strncpy(e.updatedate, e.createdate, sizeof(e.updatedate) - 1);
 

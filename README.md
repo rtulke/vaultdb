@@ -128,7 +128,8 @@ Interactive vault for keeping test credentials: add, view, edit, delete entries 
 - Copy password to clipboard for 10s via `copy <id>` (pbcopy/xclip/xsel/wl-copy/clip).
 - Passwords are masked in table views; view details or copy to clipboard to reveal.
 - Toggle password visibility in detail view via `Ctrl+T`/`toggle` after a `show <id>`.
-- Obfuscated CSV database persisted to `~/.vault.db` (or system locations when root).
+- Extra fields: OTP/TOTP secret, security question, favorite flag; table shows a Fav column (`*`).
+- Obfuscated CSV database persisted to `~/.vault.db` (or system locations when root) with fields `id,description,user,password,url,comment,tags,createdate,updatedate,status,otp,security_question,favorite`.
 - Command history logging to `~/.vault.log`.
 - Action logging with timestamps for add/change/delete/password ops and lock/unlock events.
 - Wizard-driven entry creation and edits, including optional password generation.
