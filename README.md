@@ -103,7 +103,7 @@ Interactive vault for keeping test credentials: add, view, edit, delete entries 
 | `history clear` | Clear command history log. |
 | `clear` | Clear the screen. |
 | `version` | Show version/author info. |
-| `T` | Toggle password visibility in the last shown detail view. |
+| `shift+t <return>` | Toggle password visibility in the last shown detail view `show <id>`. |
 | `quit` / `exit` / `q` | Save and exit. |
 
 ### Keyboard shortcuts
