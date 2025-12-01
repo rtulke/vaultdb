@@ -187,7 +187,18 @@ Enumerates every combination in the length range using charset presets:
 | `--progress-every N` | both | Print progress every N attempts (defaults: 100000 wordlist, 50000 exhaustive). |
 | `--max-matches N` | both | Stop after N matches (default: 1). |
 | `--quiet` | both | Suppress progress output. |
-| Charset presets | exhaustive | `digits` (0-9), `letters` (a-zA-Z), `alnum` (a-zA-Z0-9), `special` (default `!@#$%^&*()-_=+[]{};:'",.<>/?\`~`, override via `--special`), `digits-special` (0-9 + special set), `letters-special` (a-zA-Z + special), `alnum-special` (a-zA-Z0-9 + special), `common-special` (letters+digits+default specials), `custom` (use `--chars "..."`). |
+
+| Charset presets  | Description |
+| :--------------- | :-----------|
+| `digits`         | 0-9         |
+| `letters`        | a-zA-Z      |
+| `alnum`          | a-zA-Z0-9   |
+| `special`        | default `!@#$%^&*()-_=+[]{};:'",.<>/?\`~`, override via `--special`) |
+| `digits-special` | 0-9 + special set
+| `letters-special`| a-zA-Z + special |
+| `alnum-special`  | a-zA-Z0-9 + special |
+| `common-special` | letters+digits+default specials |
+| `custom`         | use `--chars "..."` |
 
 Example runs:
 
